@@ -5,6 +5,7 @@
 
 # THIS TABLE IS SORTED.  KEEP IT THAT WAY.
 # Most of the time we can define all the variables all at once...
+echo "configure.host: libffi configuration for host ${host}"
 case "${host}" in
   aarch64*-*-*)
 	TARGET=AARCH64; TARGETDIR=aarch64
@@ -235,11 +236,18 @@ case "${host}" in
 	SOURCES="ffi.c elfbsd.S"
 	;;
 
+  ve-*-*)
+       echo "ve-*-* ..."
+       TARGET=VE; TARGETDIR=ve;
+       SOURCES="ffi.c sysv.S"
+       ;;
   xtensa*-*)
 	TARGET=XTENSA; TARGETDIR=xtensa
 	SOURCES="ffi.c sysv.S"
 	;;
 esac
+echo "     --> SOURCES ${SOURCES}"
+echo "     --> TARGET ${TARGET}"
 
 # ... but some of the cases above share configury.
 case "${TARGET}" in
@@ -277,6 +285,9 @@ case "${TARGET}" in
 	fi
 	;;
 esac
+echo "     --> SOURCES   ${SOURCES}"
+echo "     --> TARGET    ${TARGET}"
+echo "     --> TARGETDIR ${TARGETDIR}"
 
 # If we failed to configure SOURCES, we can't do anything.
 if test -z "${SOURCES}"; then

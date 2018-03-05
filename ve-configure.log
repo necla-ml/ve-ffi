@@ -1,0 +1,172 @@
+sourcing bashrc-ve
+checking build system type... x86_64-unknown-linux-gnu
+checking host system type... ve-unknown-linux-gnu
+checking target system type... ve-unknown-linux-gnu
+continue configure in default builddir "./ve-unknown-linux-gnu"
+....exec /bin/sh .././configure "--srcdir=.." "--enable-builddir=ve-unknown-linux-gnu" "linux
+gnu"
+checking build system type... x86_64-unknown-linux-gnu
+checking host system type... ve-unknown-linux-gnu
+checking target system type... ve-unknown-linux-gnu
+checking for gsed... sed
+checking for a BSD-compatible install... /usr/bin/install -c
+checking whether build environment is sane... yes
+checking for ve-unknown-linux-gnu-strip... no
+checking for strip... strip
+configure: WARNING: using cross tools not prefixed with host triplet
+checking for a thread-safe mkdir -p... /usr/bin/mkdir -p
+checking for gawk... gawk
+checking whether make sets $(MAKE)... yes
+checking whether make supports nested variables... yes
+checking for musl-ncc... ncc
+checking for ve-unknown-linux-gnu-gcc... (cached) ncc
+checking whether the C compiler works... yes
+checking for C compiler default output file name... a.out
+checking for suffix of executables... 
+checking whether we are cross compiling... yes
+checking for suffix of object files... o
+checking whether we are using the GNU C compiler... yes
+checking whether ncc accepts -g... yes
+checking for ncc option to accept ISO C89... none needed
+checking for style of include used by make... GNU
+checking dependency style of ncc... tru64
+checking whether we are using the GNU C++ compiler... yes
+checking whether nc++ accepts -g... yes
+checking dependency style of nc++... tru64
+checking dependency style of nas... none
+checking whether ncc and cc understand -c and -o together... yes
+checking how to print strings... printf
+checking for a sed that does not truncate output... /usr/bin/sed
+checking for grep that handles long lines and -e... /usr/bin/grep
+checking for egrep... /usr/bin/grep -E
+checking for fgrep... /usr/bin/grep -F
+checking for ld used by ncc... nld
+checking if the linker (nld) is GNU ld... yes
+checking for BSD- or MS-compatible name lister (nm)... no
+checking for ve-unknown-linux-gnu-dumpbin... no
+checking for ve-unknown-linux-gnu-link... no
+checking for dumpbin... no
+checking for link... link -dump
+checking the name lister (nm) interface... BSD nm
+checking whether ln -s works... yes
+checking the maximum length of command line arguments... 1572864
+checking whether the shell understands some XSI constructs... yes
+checking whether the shell understands "+="... yes
+checking how to convert x86_64-unknown-linux-gnu file names to ve-unknown-linux-gnu format... func_convert_file_noop
+checking how to convert x86_64-unknown-linux-gnu file names to toolchain format... func_convert_file_noop
+checking for nld option to reload object files... -r
+checking for ve-unknown-linux-gnu-objdump... no
+checking for objdump... objdump
+checking how to recognize dependent libraries... pass_all
+checking for ve-unknown-linux-gnu-dlltool... no
+checking for dlltool... no
+checking how to associate runtime and link libraries... printf %s\n
+checking for ve-unknown-linux-gnu-ar... nar
+checking for archiver @FILE support... @
+checking for ve-unknown-linux-gnu-strip... strip
+checking for ve-unknown-linux-gnu-ranlib... nranlib
+checking command to parse nm output from ncc object... ok
+checking for sysroot... no
+checking for ve-unknown-linux-gnu-mt... no
+checking for mt... no
+checking if : is a manifest tool... no
+checking how to run the C preprocessor... ncc -E
+checking for ANSI C header files... yes
+checking for sys/types.h... yes
+checking for sys/stat.h... yes
+checking for stdlib.h... yes
+checking for string.h... yes
+checking for memory.h... yes
+checking for strings.h... yes
+checking for inttypes.h... yes
+checking for stdint.h... yes
+checking for unistd.h... yes
+checking for dlfcn.h... yes
+checking for objdir... .libs
+checking if ncc supports -fno-rtti -fno-exceptions... yes
+checking for ncc option to produce PIC... -fPIC -DPIC
+checking if ncc PIC flag -fPIC -DPIC works... yes
+checking if ncc static flag -static works... no
+checking if ncc supports -c -o file.o... yes
+checking if ncc supports -c -o file.o... (cached) yes
+checking whether the ncc linker (nld) supports shared libraries... yes
+checking whether -lc should be explicitly linked in... no
+checking dynamic linker characteristics... ncc: Warning: unrecognized option '-print-search-dirs'
+ncc: no input files
+GNU/Linux ld.so
+checking how to hardcode library paths into programs... immediate
+checking whether stripping libraries is possible... yes
+checking if libtool supports shared libraries... yes
+checking whether to build shared libraries... yes
+checking whether to build static libraries... yes
+checking how to run the C++ preprocessor... ncc -E
+checking for ld used by nc++... nld
+checking if the linker (nld) is GNU ld... yes
+checking whether the nc++ linker (nld) supports shared libraries... yes
+checking for nc++ option to produce PIC... -fPIC -DPIC
+checking if nc++ PIC flag -fPIC -DPIC works... yes
+checking if nc++ static flag -static works... no
+checking if nc++ supports -c -o file.o... yes
+checking if nc++ supports -c -o file.o... (cached) yes
+checking whether the nc++ linker (nld) supports shared libraries... yes
+checking dynamic linker characteristics... (cached) GNU/Linux ld.so
+checking how to hardcode library paths into programs... immediate
+checking size of size_t... 8
+checking for C compiler vendor... gnu
+checking CFLAGS for maximum warnings... -Wall
+checking whether to enable maintainer-specific portions of Makefiles... no
+checking sys/mman.h usability... yes
+checking sys/mman.h presence... yes
+checking for sys/mman.h... yes
+checking for mmap... yes
+checking for mkostemp... yes
+checking for sys/mman.h... (cached) yes
+checking for mmap... (cached) yes
+checking whether read-only mmap of a plain file works... yes
+checking whether mmap from /dev/zero works... yes
+checking for MAP_ANON(YMOUS)... yes
+checking whether mmap with MAP_ANON(YMOUS) works... yes
+configure.host: libffi configuration for host ve-unknown-linux-gnu
+ve-*-* ...
+     --> SOURCES ffi.c sysv.S
+     --> TARGET VE
+     --> SOURCES   ffi.c sysv.S
+     --> TARGET    VE
+     --> TARGETDIR ve
+checking for ANSI C header files... (cached) yes
+checking for memcpy... yes
+checking for size_t... yes
+checking for working alloca.h... yes
+checking for alloca... yes
+checking size of double... 8
+checking size of long double... 16
+checking whether byte ordering is bigendian... no
+checking assembler .cfi pseudo-op support... yes
+checking for _ prefix in compiled symbols... no
+checking whether .eh_frame section should be read-only... yes
+checking for __attribute__((visibility("hidden")))... yes
+ncc: Warning: unrecognized option '-print-multi-os-directory'
+ncc: no input files
+checking for ld used by ncc... (cached) nld
+checking if the linker (nld) is GNU ld... (cached) yes
+checking for shared libgcc... no
+configure: versioning on shared library symbols is gnu
+checking that generated files are newer than configure... done
+configure: creating ./config.status
+config.status: creating include/Makefile
+config.status: creating include/ffi.h
+config.status: creating Makefile
+config.status: creating testsuite/Makefile
+config.status: creating man/Makefile
+config.status: creating doc/Makefile
+config.status: creating libffi.pc
+config.status: creating fficonfig.h
+config.status: fficonfig.h is unchanged
+config.status: linking ../src/ve/ffitarget.h to include/ffitarget.h
+config.status: executing buildir commands
+config.status: reusing top_srcdir/Makefile from earlier configure
+config.status: build in ve-unknown-linux-gnu (HOST=)
+config.status: executing depfiles commands
+config.status: executing libtool commands
+config.status: executing include commands
+config.status: executing src commands
