@@ -38,7 +38,7 @@
 /* XXX these lose for some platforms, I'm sure. */
 #define CNAME(x) x
 
-#define ENTRY(x) .balign 16; .globl CNAME(x
+#define ENTRY(x) .balign 16; .globl CNAME(x)
 /* .type CNAME(x),%function; CNAME(x): */
 
 #define CNAMESZ(x) X##auto_size
@@ -64,7 +64,7 @@
 
 
 	.text
-#if 0
+#if 1
 ####### caller's stack frame
 #   Locals and Temporaries
 # .............
