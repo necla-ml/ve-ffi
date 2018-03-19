@@ -64,6 +64,7 @@
 
 
 	.text
+#if 0
 ####### caller's stack frame
 #   Locals and Temporaries
 # .............
@@ -85,6 +86,7 @@
 #    ### same, but wrt %sp for callee
 # 
 # ............ Callee Stack Frame (16-byte alignment)
+#endif
 
 #  This began with prologue and epilogue code appropriate for
 #  functions returning void
