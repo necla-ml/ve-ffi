@@ -64,7 +64,7 @@
 
 
 	.text
-#if 1
+#if 0
 ####### caller's stack frame
 #   Locals and Temporaries
 # .............
@@ -86,18 +86,18 @@
 #    ### same, but wrt %sp for callee
 # 
 # ............ Callee Stack Frame (16-byte alignment)
-#endif
 
 #  This began with prologue and epilogue code appropriate for
 #  functions returning void
+#endif
 ENTRY(ffi_call_SYSV)
-	#stack frame .cfi directives are for nice stack debug
+	;#stack frame .cfi directives are for nice stack debug
 	.cfi_startproc
 	st	%fp,0x0(,%sp)
 	.cfi_def_cfa_offset 0
 	.cfi_offset	9,0		# ? %fp is %s9?
 	st	%lr,0x8(,%sp)# %lr~%s10 Link Reg: ret addr
-	# skip %tp at 0x10(,%sp)
+	;# skip %tp at 0x10(,%sp)
 	st	%got,0x18(,%sp)
 	st	%plt,0x20(,%sp)
 	lea	%got,_GLOBAL_OFFSET_TABLE_@PC_LO(-0x18)
@@ -128,15 +128,15 @@ ENTRY(ffi_call_SYSV)
 	shm.l	%sp,0x10(%s61)
 	monc
 	or	%s0,0,%s62
-.L_EoP: # end prologue
-	# ? %s12 Outer Register:
-	#	"Used for pointing start address of called function"
+.L_EoP: ;# end prologue
+	;# ? %s12 Outer Register:
+	;#	"Used for pointing start address of called function"
 
-# (call preg_args, invoke function, handle return values)
+;# (call preg_args, invoke function, handle return values)
 
-.L_BoE: # begin epilogue
+.L_BoE: ;# begin epilogue
 	S18_TO_33( ld, %fp )	# Paranoia: %s18..33 belong to caller
-	# Remove the space we pushed for the args
+	;# Remove the space we pushed for the args
 	or	%sp,0,%fp	# callee stack frame -> Gone!
 	.cfi_def_cfa	11,8
 	ld	%got,0x18(,%sp)
