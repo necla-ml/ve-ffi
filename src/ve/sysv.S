@@ -668,4 +668,3 @@ __FRAME_BEGIN__:
 	.align	2
 .LEFDE3:
 #endif
-#endif
