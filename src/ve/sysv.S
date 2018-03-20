@@ -41,7 +41,7 @@
 #define ENTRY(x) .balign 16; .globl CNAME(x)
 /* .type CNAME(x),%function; CNAME(x): */
 
-#define CNAMESZ(x) X##auto_size
+#define CNAMESZ(X) X##auto_size
 
 #define S18_TO_33(OP, FP) \
 	OP %s18,48(,FP); \
@@ -90,49 +90,133 @@
 #  This began with prologue and epilogue code appropriate for
 #  functions returning void
 #endif
-ENTRY(ffi_call_SYSV)
+;#ENTRY(ffi_call_SYSV)
+.balign 16
+.globl ffi_call_sysV
+ffi_call_sysV:
+	;# %s0..%s7 parameter passing, caller save
+	;# %s0:	ffi_prep_args	void(*)(char* stack, extended_cif *)
+	;# %s1:	&ecif		extended_cif *
+	;# %s2:	bytes		from cif->bytes
+	;# %s3:	flags		from cif->flags
+	;# %s4:	flags2		from cif->flags2, if defined(FFI_EXTRA_CIF_FIELDS)
+	;# %s5:	rvalue		unsigned *
+	;# %s6:	fn		void (*fn)(void)
 	;#stack frame .cfi directives are for nice stack debug
 	.cfi_startproc
 	st	%fp,0x0(,%sp)
 	.cfi_def_cfa_offset 0
-	.cfi_offset	9,0		# ? %fp is %s9?
-	st	%lr,0x8(,%sp)# %lr~%s10 Link Reg: ret addr
-	;# skip %tp at 0x10(,%sp)
+	.cfi_offset	9,0		# %fp is %s9
+	st	%lr,0x8(,%sp)		# %lr~%s10 Link Reg: ret addr
+	;				# skip %tp at 0x10(,%sp)
 	st	%got,0x18(,%sp)
 	st	%plt,0x20(,%sp)
-	lea	%got,_GLOBAL_OFFSET_TABLE_@PC_LO(-0x18)
+	lea	%got,_GLOBAL_OFFSET_TABLE_@PC_LO(-24) 	#-0x18
 	and	%got,%got,(32)0
-	sic	%plt		# %plt := IC + 8
+	sic	%plt			# %plt := IC + 8
 	lea.sl	%got,_GLOBAL_OFFSET_TABLE_@PC_HI(%plt,%got)
-	or	%fp,0,%sp	# %fp := %sp
+	or	%fp,0,%sp		# %fp := %sp
 	
-	.cfi_def_cfa_register	9
-	S18_TO_33( st, %fp )
+	.cfi_def_cfa_register	9	# %s9 is the frame points
+	S18_TO_33( st, %fp )		# %s18-%s33 Callee-saved
 	
 #if 0
-	lea	%s13,.L.1.2auto_size&0xffffffff
-	and	%s13,%s13,(32)0
-	lea.sl	%sp,.L.1.2auto_size>>32(%fp,%s13)
-#else
 	lea	%s13,CNAMESZ(ffi_call_SYSV)&0xffffffff
 	and	%s13,%s13,(32)0
 	lea.sl	%sp,CNAMESZ(ffi_call_SYSV)>>32(%fp,%s13)
+#elif 1
+	lea %sp, neg_needed_stack_size(,%fp)
+	;#sub %sp, %fp,%s2		# sp := fp - cif->bytes ???
 #endif
-	brge.l.t	%sp,%sl,.L_1.EoP
+	brge.l.t	%sp,%sl,.L_EoP
 	
-	ld	%s61,0x18(,%tp)
-	or	%s62,0,%s0
-	lea	%s63,0x13b
-	shm.l	%s63,0x0(%s61)
-	shm.l	%sl,0x8(%s61)
-	shm.l	%sp,0x10(%s61)
+	ld	%s61,0x18(,%tp)	# load param area. Host Memory pointer?
+	or	%s62,0,%s0	# spill value of %s0
+	lea	%s63,0x13b	# syscall "grow" 
+	shm.l	%s63,0x0(%s61)	# stored at addr:0. shm.l ~ Store Host Memory long(8byte)
+	shm.l	%sl,0x8(%s61)	# old limit at addr:8
+	shm.l	%sp,0x10(%s61)	# new limit at addr:16
 	monc
-	or	%s0,0,%s62
+	or	%s0,0,%s62	# restore value of $s0
 .L_EoP: ;# end prologue
+
+	.set neg_need_stack_size, -1024 # ???
+	/* (call preg_args, invoke function, handle return values) */
 	;# ? %s12 Outer Register:
 	;#	"Used for pointing start address of called function"
-
-;# (call preg_args, invoke function, handle return values)
+	or	%s12,0,%s0	# ffi_prep_args(
+	lea	%s0,0,176(,%sp)	#	%s0 = char *stack,
+	st	%sp,0x0(,%s0)	#
+	;#or	%s1,0,%s1	#	%s1 = extended_cif* ecif
+	bsic	%lr,(,%s12)	# )
+#if 0
+%s12: Outer register, used for pointing start address of call3ed function
+absolute direct extern void function()
+	function();
+		lea %s12,function@LO
+		and %s12,%s12,(32)0
+		lea.sl %s12,function@HI(,%s12)
+		bsic %lr,(,%s12)
+PIC direct extern void function();
+	function();
+		lea %s12,function@PLT_LO(-24)
+		and %s12,%s12,(32)0
+		sic %s63
+		lea.sl %s12,function@PLT_HI(%s12,%s63)
+		bsic %lr,(,%s12)
+Abs, indirect
+	extern void (*ptr)();
+	extern void name();
+	ptr = name;
+		lea %s63,name@LO
+		and %s63,%s63,(32)0
+		lea.sl %s63,name@HI(,%s63)
+		lea %s62,ptr@LO
+		and %s62,%s62,(32)0
+		lea.sl %s62,ptr@HI(,%s62)
+		and %s62,%s62,(32)0
+		lea.sl %s62,ptr@HI(,%s62)
+		st %s63,(,%s62)
+	(*ptr)();
+		lea %s61,ptr@LO
+		and %s61,%s61,(32)0
+		lea.sl %s61,ptr@HI(,%s61)
+		ld %s61,(,%s61)
+		or %s12,%s61,(0)1
+		bsic %lr,(,%s12)
+PIC indirect
+	extern void (*ptr)();
+	extern void name();
+	ptr = name;
+		lea %s63,name@GOT_LO
+		and %s63,%s63,(32)0
+		lea.sl %s63,name@GOT_HI(%s63,%got)
+		ld %s63,(,%s63)
+		lea %s62,ptr@GOT_LO
+		and %s62,%s62,(32)0
+		lea.sl %s62,ptr@GOT_HI(%s62,%got)
+		ld %s62,(,%s62)
+		st %s63,(,%s62)
+	(*ptr)();
+		lea %s61,ptr@GOT_LO
+		and %s61,%s61,(32)0
+		lea.sl %s61,ptr@GOT_HI(%s61,%got)
+		ld %s61,(,%s61)
+		ld %s61,(,%s61)
+		or %s12,%s61,(0)1
+		bsic %lr,(,%s12)
+PIC static
+	static void function();
+		.type function,@function
+		function:
+	function();
+		lea %s12,function@PC_LO(-24)
+		and %s12,%s12,(32)0
+		sic %s63
+		lea.sl %s12,function@PC_HI(%s12,%s63)
+		bsic %lr,(,%s12)
+#endif
+	/* or	%s0,0,return_value */
 
 .L_BoE: ;# begin epilogue
 	S18_TO_33( ld, %fp )	# Paranoia: %s18..33 belong to caller
@@ -146,8 +230,11 @@ ENTRY(ffi_call_SYSV)
 	b.l	(,%lr)
 .L_EoE: #end of epilogue
 	.cfi_endproc
-	.size CNAME(ffi_call_SYSV), .L_EoE - CNAME(ffi_call_SYSV)
 #set	.L.1.2auto_size,	0xfffffffffffffe50	# 432 Bytes
+	;#.size CNAMESZ(ffi_call_SYSV), .L_EoE - CNAME(ffi_call_SYSV)
+	;#.set CNAMESZ(ffi_call_SYSV), .- CNAME(ffi_call_SYSV)
+	;#.set ffi_call_SYSV_sz, .-ffi_call_SYSV
+	.set ffi_call_SYSV_sz, 0x0  # -ve value, additional stack space for called function
 # ------------------------------------------------------------
 #if 0
 .L_epilogue:

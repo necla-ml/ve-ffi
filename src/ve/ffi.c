@@ -438,34 +438,31 @@ void ffi_call(/*@dependent@*/ ffi_cif *cif,
 	      /*@dependent@*/ void **avalue)
 {
     /* We might not need an extended_cif at all */
-    debug(2,"ve: ffi_prep_cif_machdep(ffi_cif*) DONE\n%s\n", ffi_cif_str(cif));
+    debug(2,"ve: ffi_call(ffi_cif*, void(*fn)(), void*rvalue, void**avalue)) BEGINS\n cif = %s\n fn = 0x%lx\n rvalue = 0x%lx\n avalue=0x%lx\n", ffi_cif_str(cif), (long)fn, (long)rvalue, (long(avalue));
     extended_cif ecif;
     UINT64 trvalue;     /* temporary rvalue */
 
+    /* argument values */
     ecif.cif = cif;
     if( cif->nargs == 0 ) ecif.avalue = NULL; /* avalues is ignored */
     else ecif.avalue = avalue;
 
+    /* return value */
     if( cif->rtype->type == FFI_TYPE_VOID )
         ecif.rvalue = &trvalue; /* rvalue is ignored */
+#if !FFI_NOSTRUCTS
+    /* If the return value is a struct and we don't have a */
+    /* return value address then we need to make one	   */
+    /* VE: this adress could be muxed into the arg passing area ? */
+    else if (rvalue == NULL
+            && (cif->rtype->type == FFI_TYPE_STRUCT)
+            && cif->rtype->size > 8)
+        ecif.rvalue = alloca(cif->rtype->size);
+#endif
     else{
         ecif.rvalue = rvalue; /* pointer to a chunk of memory that will hold the result
                                  of the function call (min 8==register size bytes).
                                  Caller must ensure correct alignment. */
-#if !FFI_NOSTRUCTS
-        /* If the return value is a struct and we don't have a return	*/
-        /* value address then we need to make one		        */
-        /* VE: this adress could be muxed into the arg passing area ? */
-#if 0
-        if (cif->rtype->type == FFI_TYPE_STRUCT
-                && return_type (cif->rtype) != FFI_TYPE_STRUCT)
-            ecif.rvalue = &trvalue;
-        else{}
-#endif
-        if ((rvalue == NULL) && (cif->rtype->type == FFI_TYPE_STRUCT)){
-            ecif.rvalue = alloca(cif->rtype->size);
-        }
-#endif
     }
 
     switch (cif->abi) 
@@ -488,6 +485,7 @@ void ffi_call(/*@dependent@*/ ffi_cif *cif,
             && return_type (cif->rtype) != FFI_TYPE_STRUCT)
         memcpy (rvalue, &trvalue, cif->rtype->size);
 #endif
+    debug(2,"ve: ffi_call(ffi_cif*, void(*fn)(), void*rvalue, void**avalue)) ENDS\n cif = %s\n fn = 0x%lx\n rvalue = 0x%lx\n avalue=0x%lx\n", ffi_cif_str(cif), (long)fn, (long)rvalue, (long(avalue));
 }
 
 #if FFI_CLOSURES
