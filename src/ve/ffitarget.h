@@ -45,7 +45,7 @@ typedef enum ffi_abi {
   FFI_DEFAULT_ABI = FFI_SYSV
 } ffi_abi;
 
-//#define FFI_EXTRA_CIF_FIELDS long unsigned flags2
+#define FFI_EXTRA_CIF_FIELDS long unsigned flags2
 // TODO
 //#define FFI_TARGET_SPECIFIC_VARIADIC 32
 #endif

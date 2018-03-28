@@ -45,7 +45,6 @@
 
 #define S18_TO_33(OP, FP) \
 	OP %s18,48(,FP); \
-	OP %s18,48(,FP); \
 	OP %s19,56(,FP); \
 	OP %s20,64(,FP); \
 	OP %s21,72(,FP); \
@@ -62,6 +61,25 @@
 	OP %s32,160(,FP); \
 	OP %s33,168(,FP);
 
+/* Use s18..s25 as spill registers for s0..s7 */
+#define SAVE_S0_TO_S7 \
+	or	%s18,%s0,(0)1; \
+	or	%s19,%s1,(0)1; \
+	or	%s20,%s2,(0)1; \
+	or	%s21,%s3,(0)1; \
+	or	%s22,%s4,(0)1; \
+	or	%s23,%s5,(0)1; \
+	or	%s24,%s6,(0)1; \
+	or	%s25,%s7,(0)1
+#define RESTORE_S0_TO_S7 \
+	or	%s0,%s18,(0)1; \
+	or	%s1,%s19,(0)1; \
+	or	%s2,%s20,(0)1; \
+	or	%s3,%s21,(0)1; \
+	or	%s4,%s22,(0)1; \
+	or	%s5,%s23,(0)1; \
+	or	%s6,%s24,(0)1; \
+	or	%s7,%s25,(0)1
 
 	.text
 #if 0
@@ -92,8 +110,8 @@
 #endif
 ;#ENTRY(ffi_call_SYSV)
 .balign 16
-.globl ffi_call_sysV
-ffi_call_sysV:
+.globl ffi_call_SYSV
+ffi_call_SYSV:
 	;# %s0..%s7 parameter passing, caller save
 	;# %s0:	ffi_prep_args	void(*)(char* stack, extended_cif *)
 	;# %s1:	&ecif		extended_cif *
@@ -119,16 +137,47 @@ ffi_call_sysV:
 	
 	.cfi_def_cfa_register	9	# %s9 is the frame points
 	S18_TO_33( st, %fp )		# %s18-%s33 Callee-saved
-	
-#if 0
-	lea	%s13,CNAMESZ(ffi_call_SYSV)&0xffffffff
-	and	%s13,%s13,(32)0
-	lea.sl	%sp,CNAMESZ(ffi_call_SYSV)>>32(%fp,%s13)
-#elif 1
-	lea %sp, neg_needed_stack_size(,%fp)
-	;#sub %sp, %fp,%s2		# sp := fp - cif->bytes ???
+
+	/* call to ffi_prep_args can clobber s0..s7, so save rvalue and fn */
+sysv_save:
+#define REG_ffi_prep_args %s18
+#define REG_ptr_ecif %s19
+#define REG_cif_bytes %s20
+#define REG_flags %s21
+#define REG_flags2 %s22
+#define REG_rvalue %s23
+#define REG_fn %s24
+	or	%s18,%s0,(0)1	# ffi_prep_args
+	or	%s19,%s1,(0)1	# &ecif
+	or	%s20,%s2,(0)1	# cif->bytes
+	or	%s21,%s3,(0)1	# flags
+	or	%s22,%s4,(0)1	# flags2
+	or	%s23,%s5,(0)1	# rvalue
+	or	%s24,%s6,(0)1	# fn
+#if 1 // DEBUG
+	;# print current %s0 register: %s27 = addr of print_s0 function
+#ifdef PIC
+	lea	%s12, print_s0@PLT_LO(-24)
+	and	%s12,%s12,(32)0
+	sic	%lr
+	lea.sl	%s12,print_s0@PLT_HI(%s12,%lr)
+#else
+	lea	%s12, print_s0@LO
+	and	%s12,%s12,(32)0
+	lea.sl	%s12,print_s0@HI(,%s12)
 #endif
-	brge.l.t	%sp,%sl,.L_EoP
+	or	%s27,%s12,(0)1	# save addr of "print_s0" fn
+#endif
+	
+	#.globl neg_needed_stack_size
+	.set neg_needed_stack_size, -1024 # ???
+	lea	%sp, neg_needed_stack_size(,%fp)
+	subu.l	%sp, %sp,%s2		# sp := sp - cif->bytes
+	/* simple approach:
+		64 [reg args area]
+	 +	?? [non-reg-args area]
+	 = cif->bytes */
+	brge.l.t	%sp,%sl,.L_EoP	# sp >= stack limit[long,taken]?
 	
 	ld	%s61,0x18(,%tp)	# load param area. Host Memory pointer?
 	or	%s62,0,%s0	# spill value of %s0
@@ -140,15 +189,129 @@ ffi_call_sysV:
 	or	%s0,0,%s62	# restore value of $s0
 .L_EoP: ;# end prologue
 
-	.set neg_need_stack_size, -1024 # ???
+#define FUNCTIONALITY 3
+/* 1 : call prep_args
+   2 : invoke function
+   3 : return value
+*/
+#if FUNCTIONALITY >= 2
+sysv_prep:
 	/* (call preg_args, invoke function, handle return values) */
+
+	;#or	%s26,%sp,(0)1	# spill our stack frame pointer
+
 	;# ? %s12 Outer Register:
 	;#	"Used for pointing start address of called function"
-	or	%s12,0,%s0	# ffi_prep_args(
-	lea	%s0,0,176(,%sp)	#	%s0 = char *stack,
-	st	%sp,0x0(,%s0)	#
+	or	%s12,%s0,(0)1	# ffi_prep_args(
+	lea	%s0,176(,%sp)	#	%s0 = char *stack, 1st in Parameter Area for callee
+	;# OUCH WRONG, we execute in current stack frame!!!	st	%sp,0x0(,%s0)	#
 	;#or	%s1,0,%s1	#	%s1 = extended_cif* ecif
+	or	%s1,%s19,(0)1	#	%s1 = extended_cif* ecif
 	bsic	%lr,(,%s12)	# )
+	;# ffi_prep_args writes the argument values into the stack
+	;# we expect *stack value to end up pointing cif->bytes higher address
+	;#  BUT because of <= 8 register-only args, we'll have ffi_prep_args
+	;# ALSO (ALWAYS) set up an additional 8*8 bytes blindly slurped into %s0..%s7
+	#or	%sp,%s26,(0)1	# restore our stack frame, with *stack values written
+#endif
+
+sysv_restore:
+#if 0
+#if 0
+	ld	%s0,-1*8(,%fp); ld	%s1,-2*8(,%fp); ld	%s2,-3*8(,%fp); ld	%s3,-4*8(,%fp);
+	ld	%s4,-5*8(,%fp); ld	%s5,-6*8(,%fp); ld	%s6,-7*8(,%fp); ld	%s7,-8*8(,%fp);
+#else
+	or	%s0,%s18,(0)1	# ffi_prep_args (already called, %s18 is free now)
+	or	%s1,%s19,(0)1	# &ecif
+	or	%s2,%s20,(0)1	# cif->bytes
+	or	%s3,%s21,(0)1	# flags
+	or	%s4,%s22,(0)1	# flags2
+	or	%s5,%s23,(0)1	# rvalue
+	or	%s6,%s24,(0)1	# fn
+#endif
+#endif
+;# s0/18:ffi_prep_args s1/19:&ecif s2/20:bytes s3/21:flags s4/22:flags2 s5/23:rvalue s6/24:fn
+
+#if FUNCTIONALITY >= 2
+sysv_invoke:
+	/* invoke function ........................ in CURRENT stack frame */
+	/* load s0..s7 regs and execute call to fn (%s6-->%s24) */
+	/* How?  A simple [slow] way is to set aside a memory area
+	         and blind-copy into s0..s7. */
+	lea	%s0,176(,%sp)	#	%s0 = char *stack, 1st in Parameter Area for callee
+	adds.l	%s1,%s20,(58)1	#	cif->bytes - 64 ??
+	adds.l	%s18,%s0,%s1	# %s18 : char* stkreg = stack + cif->bytes - 64
+#if 1 // debug
+	or	%s0,0,%s18
+	bsic	%lr,(,%s27)	# print_s0( stkreg )
+#endif
+	ld	%s0,0*8(,%s18)	# mirror stkreg --> %s0..7
+	ld	%s1,1*8(,%s18)
+	ld	%s2,2*8(,%s18)
+	ld	%s3,3*8(,%s18)
+	ld	%s4,4*8(,%s18)
+	ld	%s5,5*8(,%s18)
+	ld	%s6,6*8(,%s18)
+	ld	%s7,7*8(,%s18)
+sysv_inv2:
+	
+	/* point stack at non-register arg area */
+	;#lea	%sp,...
+	/* call fn (was in %s6, now in %s24) */
+	or	%s12,%s24,(0)1
+        bsic	%lr,(,%s12)	# retval (if rvalue!=NULL) is in %s0 (I think)
+	;#or	%sp,%s26,(0)1	# restore our stack frame (?)
+	st	%s0,-1*8(,%fp)	# spill retval
+
+#if 1 // DEBUG
+sysv_dbg:
+	;#SAVE_S0_TO_S7;		# spill into s18..25
+	bsic	%lr,(,%s27)	# print_s0
+	;# print rvalue (ptr that will get return value)
+	or	%s0,%s23,(0)1
+	bsic	%lr,(,%s27)
+	;#RESTORE_S0_TO_S7;	# resture from s18..25
+#endif // DEBUG
+
+	ld	%s0,-1*8(,%fp)	# retrieve retval
+#endif
+	
+#if FUNCTIONALITY >= 3
+sysv_retval:
+	/* handle return value ............................. */
+	/* or	%s0,0,return_value */
+	;# (*rvalue) = %s0
+	breq.l.nt	%s23,0,.L_BoE	# rvalue=0? skip rvalue
+	ld		%s0,-1*8(,%fp)	# retrieve retval
+	st		%s0,0(,%s23)	# (*rvalue) = %s0  (ok for 8-byte return type)
+#if 1 // DEBUG
+	ld	%s0,0(,%s23)	# print *rvalue (as uint64)
+	bsic	%lr,(,%s27)	# print_s0
+#endif
+sysv_ret2:
+	ld	%s0,-1*8(,%fp)	# retrieve retval
+#endif
+
+sysv_epilogue:
+.L_BoE: ;# begin epilogue
+	S18_TO_33( ld, %fp )	# Paranoia: %s18..33 belong to caller
+	;# Remove the space we pushed for the args
+	or	%sp,0,%fp	# callee stack frame -> Gone!
+	.cfi_def_cfa	11,8
+	ld	%got,0x18(,%sp)
+	ld	%plt,0x20(,%sp)
+	ld	%lr, 0x8(,%sp)
+	ld	%fp, 0x0(,%sp)
+sysv_ret:
+	b.l	(,%lr)
+.L_EoE: #end of epilogue
+	.cfi_endproc
+#set	.L.1.2auto_size,	0xfffffffffffffe50	# 432 Bytes
+	;#.size CNAMESZ(ffi_call_SYSV), .L_EoE - CNAME(ffi_call_SYSV)
+	;#.set CNAMESZ(ffi_call_SYSV), .- CNAME(ffi_call_SYSV)
+	;#.set ffi_call_SYSV_sz, .-ffi_call_SYSV
+	.set ffi_call_SYSV_sz, 0x0  # -ve value, additional stack space for called function
+# ------------------------------------------------------------
 #if 0
 %s12: Outer register, used for pointing start address of call3ed function
 absolute direct extern void function()
@@ -216,26 +379,6 @@ PIC static
 		lea.sl %s12,function@PC_HI(%s12,%s63)
 		bsic %lr,(,%s12)
 #endif
-	/* or	%s0,0,return_value */
-
-.L_BoE: ;# begin epilogue
-	S18_TO_33( ld, %fp )	# Paranoia: %s18..33 belong to caller
-	;# Remove the space we pushed for the args
-	or	%sp,0,%fp	# callee stack frame -> Gone!
-	.cfi_def_cfa	11,8
-	ld	%got,0x18(,%sp)
-	ld	%plt,0x20(,%sp)
-	ld	%lr, 0x8(,%sp)
-	ld	%fp, 0x0(,%sp)
-	b.l	(,%lr)
-.L_EoE: #end of epilogue
-	.cfi_endproc
-#set	.L.1.2auto_size,	0xfffffffffffffe50	# 432 Bytes
-	;#.size CNAMESZ(ffi_call_SYSV), .L_EoE - CNAME(ffi_call_SYSV)
-	;#.set CNAMESZ(ffi_call_SYSV), .- CNAME(ffi_call_SYSV)
-	;#.set ffi_call_SYSV_sz, .-ffi_call_SYSV
-	.set ffi_call_SYSV_sz, 0x0  # -ve value, additional stack space for called function
-# ------------------------------------------------------------
 #if 0
 .L_epilogue:
 	add	r14, r63, r15

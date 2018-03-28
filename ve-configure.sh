@@ -1,5 +1,6 @@
 #PREFIX=`pwd`/install
-OPTS='-g2 -O1 -fPIC'
+OPTS='-g2 -O1'
+# do not add -fPIC here. libffi builds both .a and .so
 if [ -f ~/kruus/vt/env.bash ]; then
 	source ~/kruus/vt/env.bash --ve
 fi
@@ -9,10 +10,17 @@ echo 'Not using:
    CCASFLAGS="" \
    '
 
+echo "ve-configure.sh : install PREFIX=$PREFIX"
+echo "                : CFLAGS=$CFLAGS"
+echo "                : LDFLAGS=$LDFLAGS"
 ./configure \
    --build=x86_64-unknown-linux-gnu \
    --host=ve-unknown-linux-gnu \
    --prefix="$PREFIX" \
+   --enable-debug \
+   --disable-structs \
+   --disable-raw-api \
+   --disable-multi-os-directory \
    $@ \
    CC="ncc" \
    CFLAGS="$OPTS" \
@@ -28,7 +36,8 @@ echo 'Not using:
    LDFLAGS="-Wl,-z,max-page-size=0x200000" \
    READELF="nreadelf" \
    RANLIB="nranlib" \
-   STRIP="nstrip"
+   STRIP="nstrip" \
+   OBJDUMP="nobjdump"
 
 # nstrip not determined correctly?
 

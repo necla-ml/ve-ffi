@@ -34,42 +34,136 @@
 #include <stdio.h>
 #include <stdint.h> /* intptr_t */
 
-#define DEBUG_LEVEL   0
+#include <math.h>       /* fabs */
+#include <complex.h>
+
+#define DEBUG_LEVEL   3
 #define FIRST_ARG_BYTE  176 /* 22*8: fp, ret | %tp %got %plt %s17 16*%s18..33 */
 #define ROUND_UP(v, a)  (((size_t)(v) + (a) - 1) & ~((a) - 1))
 
-#define debug(lvl, x...) do { if (lvl <= DEBUG_LEVEL) { printf(x); } } while (0)
+#define debug(lvl, x...) do { if (lvl <= DEBUG_LEVEL) { printf(x); fflush(stdout); } } while (0)
 
 #define NGREGARG 8
 //#define NFREGARG 12
 
+void print_s0(UINT64 s0){
+    debug(2, " print_s0: %lu = %ld = 0x%lx ", (long unsigned)s0, (long int)s0, (long unsigned)s0);
+}
+void print_s0_example(UINT64 s0){
+    print_s0(s0);
+}
+
+typedef enum ve_argclass {
+    VE_REGISTER = 0,
+    VE_REFERENCE = 1,
+    VE_BOTH
+} Argclass;
+
+static Argclass argclass (ffi_type const *arg)
+{
+    Argclass ret = VE_REGISTER; /* most things */
+
+    if (arg->type == FFI_TYPE_STRUCT) /* or union or array */
+        ret = VE_REFERENCE;
+
+#if defined FFI_TARGET_SPECIFIC_VARIADIC
+    else if( arg->type == FFI_TARGET_SPECIFIC_VARIADIC /* where defined? */
+            /* || prototype-less ?? */
+           ) ret = VE_BOTH;
+#endif
+
+    return ret;
+}
+static char const* argclass_names[3] = {"REG","REF","BOTH"};
+
 /* ffi_type is {size_t size; u16 alignment; u16 type; _ffi_type **elements;} */
-char const* ffi_type_str( ffi_type const* const t ){
+static char const* ffi_type_str( ffi_type const* const t ){
     char * ret = "??";
     switch(t->type){
-        case( FFI_TYPE_VOID       ): ret = "void"; /*0*/
-        case( FFI_TYPE_INT        ): ret = "int"; /*1*/
-        case( FFI_TYPE_FLOAT      ): ret = "float"; /*2*/
-        case( FFI_TYPE_DOUBLE     ): ret = "double"; /*3*/
-        case( FFI_TYPE_LONGDOUBLE ): ret = "Ldouble"; /*4*/
-        case( FFI_TYPE_UINT8      ): ret = "u8"; /*5*/
-        case( FFI_TYPE_SINT8      ): ret = "s8"; /*6*/
-        case( FFI_TYPE_UINT16     ): ret = "u16"; /*7*/
-        case( FFI_TYPE_SINT16     ): ret = "s16"; /*8*/
-        case( FFI_TYPE_UINT32     ): ret = "u32"; /*9*/
-        case( FFI_TYPE_SINT32     ): ret = "s32"; /*10*/
-        case( FFI_TYPE_UINT64     ): ret = "u64"; /*11*/
-        case( FFI_TYPE_SINT64     ): ret = "s64"; /*12*/
-        case( FFI_TYPE_STRUCT     ): ret = "struct"; /*13*/
-        case( FFI_TYPE_POINTER    ): ret = "ptr"; /*14*/
-        case( FFI_TYPE_COMPLEX    ): ret = "complex"; /*15*/
-        default: ;
+        case( FFI_TYPE_VOID       ): ret = "void"; /*0*/ break;
+        case( FFI_TYPE_INT        ): ret = "int"; /*1*/ break;
+        case( FFI_TYPE_FLOAT      ): ret = "float"; /*2*/ break;
+        case( FFI_TYPE_DOUBLE     ): ret = "double"; /*3*/ break;
+        case( FFI_TYPE_LONGDOUBLE ): ret = "Ldouble"; /*4*/ break;
+        case( FFI_TYPE_UINT8      ): ret = "u8"; /*5*/ break;
+        case( FFI_TYPE_SINT8      ): ret = "s8"; /*6*/ break;
+        case( FFI_TYPE_UINT16     ): ret = "u16"; /*7*/ break;
+        case( FFI_TYPE_SINT16     ): ret = "s16"; /*8*/ break;
+        case( FFI_TYPE_UINT32     ): ret = "u32"; /*9*/ break;
+        case( FFI_TYPE_SINT32     ): ret = "s32"; /*10*/ break;
+        case( FFI_TYPE_UINT64     ): ret = "u64"; /*11*/ break;
+        case( FFI_TYPE_SINT64     ): ret = "s64"; /*12*/ break;
+        case( FFI_TYPE_STRUCT     ): ret = "struct"; /*13*/ break;
+        case( FFI_TYPE_POINTER    ): ret = "ptr"; /*14*/ break;
+        case( FFI_TYPE_COMPLEX    ): ret = "complex"; /*15*/ break;
+        default: ret = "Huh"; break;
     }
     return ret;
 }
 
+static char buf_avalue[1024];
+static char const* ffi_avalue_str( ffi_type const* const t, void* avalue ){
+    char *buf = &buf_avalue[0];
+    int rem_len = 1024;
+#define DPRINT(...) do \
+    { \
+        int n = snprintf(buf, rem_len, __VA_ARGS__); \
+        if( n > rem_len ){ rem_len = 0; } \
+        else { buf+=n; rem_len-=n; } \
+    } while(0)
+    switch(t->type){
+        case( FFI_TYPE_VOID       ): DPRINT("void"); break;
+        case( FFI_TYPE_INT        ): DPRINT("%lu",*(int*)avalue); break;
+        case( FFI_TYPE_FLOAT      ): DPRINT("%f",*(float*)avalue); break;
+        case( FFI_TYPE_DOUBLE     ): DPRINT("%f",*(double*)avalue); break;
+        case( FFI_TYPE_LONGDOUBLE ): DPRINT("%lf",*(long double*)avalue); break;
+        case( FFI_TYPE_UINT8      ): DPRINT("%lu",(long unsigned) *(UINT8*)avalue); break;
+        case( FFI_TYPE_SINT8      ): DPRINT("%ld",(long   signed) *(SINT8*)avalue); break;
+        case( FFI_TYPE_UINT16     ): DPRINT("%lu",(long unsigned) *(UINT16*)avalue); break;
+        case( FFI_TYPE_SINT16     ): DPRINT("%ld",(long   signed) *(SINT16*)avalue); break;
+        case( FFI_TYPE_UINT32     ): DPRINT("%lu",(long unsigned) *(UINT32*)avalue); break;
+        case( FFI_TYPE_SINT32     ): DPRINT("%ld",(long   signed) *(SINT32*)avalue); break;
+        case( FFI_TYPE_UINT64     ): DPRINT("%lu",(long unsigned) *(UINT64*)avalue); break;
+        case( FFI_TYPE_SINT64     ): DPRINT("%ld",(long   signed) *(SINT64*)avalue); break;
+        case( FFI_TYPE_STRUCT     ): DPRINT("struct@%p",avalue); break;
+        case( FFI_TYPE_POINTER    ): DPRINT("ptr@%p",avalue); break;
+        case( FFI_TYPE_COMPLEX    ):
+                                     {
+                                         complex c=*(complex*)avalue;
+                                         double r=creal(c), i=cimag(c);
+                                         DPRINT("%f%s%f",r,(i<0?"-i*":"+i*"),fabs(i));
+                                     } break;
+        default: DPRINT("?%p",avalue); break;
+    }
+    return &buf_avalue[0];
+}
+
+static char buf_avalues[1024];
+static char const* ffi_avalues_str( ffi_cif const* cif, void **avalue ){
+    char *buf = &buf_avalues[0];
+    int rem_len = 1024;
+#define DPRINT(...) do \
+    { \
+        int n = snprintf(buf, rem_len, __VA_ARGS__); \
+        if( n > rem_len ){ rem_len = 0; } \
+        else { buf+=n; rem_len-=n; } \
+    } while(0)
+    if(cif == NULL) DPRINT("cif==NULL,avalue=%p???",avalue);
+    else if(avalue == NULL) DPRINT("avalue=NULL???");
+    else if(cif->nargs <= 0 ) DPRINT("avalue={}");
+    else if(cif->arg_types==NULL) DPRINT("arg_types==NULL,avalue=%p???",avalue);
+    else{
+        DPRINT("avalues=");
+        for(int i=0; i<cif->nargs; ++i)
+            DPRINT("%s%s", (i==0?"{":","), ffi_avalue_str(cif->arg_types[i], avalue[i]));
+        DPRINT("}");
+    }
+    //DPRINT("\n");
+    return &buf_avalues[0];
+}
+
 static char buf_type[1024];
-char const* ffi_type_detail( ffi_type const* const t ){
+static char const* ffi_type_detail( ffi_type const* const t ){
     char *buf = &buf_type[0];
     int rem_len = 1024;
 #define DPRINT(...) do \
@@ -78,13 +172,14 @@ char const* ffi_type_detail( ffi_type const* const t ){
         if( n > rem_len ){ rem_len = 0; } \
         else { buf+=n; rem_len-=n; } \
     } while(0)
-    DPRINT("%s(s%llu,a%u)", ffi_type_str(t), (unsigned long long)t->size, (unsigned)t->alignment);
+    DPRINT("%s(s%llu,a%u)%s", ffi_type_str(t), (unsigned long long)t->size
+            , (unsigned)t->alignment, argclass_names[argclass(t)]);
     return &buf_type[0];
 #undef DPRINT
 }
 
 static char buf_cif[1024];
-char const* ffi_cif_str( ffi_cif const* cif){
+static char const* ffi_cif_str( ffi_cif const* cif){
     char *buf = &buf_cif[0];
     int rem_len = 1024;
 #define DPRINT(...) do \
@@ -99,7 +194,7 @@ char const* ffi_cif_str( ffi_cif const* cif){
     else{
         /* ffi_type **arg_types */
         for(int i=0; i<cif->nargs; ++i)
-            DPRINT((i==0?"{":","),ffi_type_detail(cif->arg_types[i]));
+            DPRINT("%s%s", (i==0?"{":","), ffi_type_detail(cif->arg_types[i]));
         DPRINT("}");
     }
     DPRINT(", rtype=");
@@ -107,10 +202,32 @@ char const* ffi_cif_str( ffi_cif const* cif){
     else DPRINT("%p[%s]", (void*)cif->rtype, ffi_type_detail(cif->rtype));
     DPRINT(", bytes:%u, flags:%u"
 #if defined(FFI_EXTRA_CIF_FIELDS)
-            " [,extra]"
+            //" [,extra]"
+            ", flags2:%lx"
 #endif /*FFI_EXTRA_CIF_FIELDS*/
             ") ",
-            cif->bytes, cif->flags);
+            cif->bytes, cif->flags
+#if defined(FFI_EXTRA_CIF_FIELDS)
+            , (long unsigned)cif->flags2
+#endif
+            );
+#if defined(FFI_EXTRA_CIF_FIELDS)
+    if(cif->flags2 == 0){
+        DPRINT("flags2:{no reg args}");
+    }else{
+        UINT64 flg = cif->flags2;
+        int greg;
+        DPRINT("flags2:");
+        for( greg=0; greg<NGREGARG; ++greg ){
+            SINT8 reginfo = flg&0xff;
+            flg >>= 8;
+            if( reginfo == 0xff ) DPRINT("R");
+            else if( reginfo == 0x80 ) DPRINT("x");
+            else if( reginfo < 0 ) DPRINT("?");
+            else DPRINT("%u",(unsigned)(UINT8)reginfo); /* reginfo>0 holds an arg# in [0,127] */
+        }
+    }
+#endif
     return &buf_cif[0];
 #undef DPRINT
 }
@@ -174,28 +291,6 @@ r......| 16(%fp)    %tp Thread Pointer Register
    (i.e. could be 1,2,4,8,16 alignment)
    */
 
-typedef enum ve_argclass {
-    VE_REGISTER = 0,
-    VE_REFERENCE = 1,
-    VE_BOTH
-} Argclass;
-
-static Argclass argclass (ffi_type *arg)
-{
-    Argclass ret = VE_REGISTER; /* most things */
-
-    if (arg->type == FFI_TYPE_STRUCT) /* or union or array */
-        ret = VE_REFERENCE;
-
-#if defined FFI_TARGET_SPECIFIC_VARIADIC
-    else if( arg->type == FFI_TARGET_SPECIFIC_VARIADIC /* where defined? */
-            /* || prototype-less ?? */
-           ) ret = VE_BOTH;
-#endif
-
-    return ret;
-}
-
 /* VE ret type can use argclass and deal with VE_REGISTER or VE_REFERENCE.
 VE_REFERENCE: %s0 holds [lowest] addr of ret value (usually 176(%fp)
 >=176(%fp) in callee-frame holds the struct data.
@@ -205,23 +300,62 @@ NEC VE ABI 0.10 does not support small-struct optimizations. */
 
 
 /* ffi_prep_args is called by the assembly routine once stack space
-   has been allocated for the function's arguments */
+   has been allocated for the function's arguments.
+   
+   \p stack points to parameter area in caller's stack frame.
 
-void ffi_prep_args(char *stack, extended_cif *ecif)
+   We organize the stack as follows, for simplicity:
+
+   low addr   --------------------> high addr
+   stack args area   | 64 bytes reg args area (for %s0..%s7)
+
+   ecif->cif->bytes must be size of non-reg stack args + 64,
+   as prepared by ffi_prep_cif_machdep(ffi_cif *cif)
+*/
+
+void ffi_prep_args(char *stack, extended_cif const* const ecif)
 {
     register unsigned int i;
     register unsigned int avn;
     register void **p_argv;
-    register char *argp;
+    register char *stkarg;
+#if ! defined(FFI_EXTRA_CIF_FIELDS)
+#error "NEC VE relies on machdep having deduce which args go in registers"
+#endif
+    register char *stkreg;      /* for now, last 64 bytes of ecif->cif->bytes are register arg mirrors */
+    register unsigned int regn;
     register ffi_type **p_arg;
 
     /* ecif = { ffi_cif*, void*rvalue, void**avalue } is used in callback from assembly */
-    debug(1, "%s: stack = %p, ecif = %p, bytes = %u, rvalue=%p, avalue=%p\n", __FUNCTION__,
-            stack, ecif, ecif->cif->bytes, ecif->rvalue, ecif->avalue);
+    debug(1, "%s %s: stack = %p, ecif = %p, bytes = %u, rvalue=%p, avalue=%p\n      ecif->cif=%s\n",
+            "BEGIN", __FUNCTION__, stack, ecif, ecif->cif->bytes, ecif->rvalue, ecif->avalue,
+            ffi_cif_str(ecif->cif));
+    if(ecif->avalue != NULL) debug(1, "      %s\n", ffi_avalues_str(ecif->cif,ecif->avalue));
 
-    argp = stack;
+    stkarg = stack;                           /* non-register args area */
+    stkreg = stack + ecif->cif->bytes - 64;   /* register mirror area %s0..%s7 */
+    debug(3,"stkreg=%p + %lu + 0x%x = %p\n",
+            (void*)stack,(long unsigned)ecif->cif->bytes,
+            -64, (void*)stkreg);
+    regn = 0;
+    UINT64 regflags = ecif->cif->flags2;
+    SINT8  reginfo = regflags&0xFF;
+#define STKREG_NEXT do { \
+    if(regn < NGREGARG){ \
+        stkreg += sizeof(UINT64); ++regn; \
+        regflags >>= 8; reginfo = regflags&0xFF; \
+        for( ; regn<NGREGARG && reginfo<0; ++regn, \
+                regflags>>=8, reginfo=regflags&0xFF ){ \
+            *(UINT64*)stkreg = 0UL; \
+            stkreg+=sizeof(UINT64); \
+        } \
+    }else{ \
+        reginfo = 0xff; /*reginfo < 0 : arg not in register */ \
+    } \
+}while(0)
 
-#if !defined(FFI_NO_STRUCTS)
+
+#if defined(FFI_NO_STRUCTS) && !FFI_NO_STRUCTS
     /* When callee returns an aggregate (VE_REFERENCE), the caller:
        - povides return memory on its stack and set %s0 to caller-176%(sp).
        and callee also set %s0 to the address of the returned struct.
@@ -232,172 +366,302 @@ void ffi_prep_args(char *stack, extended_cif *ecif)
        If not, how is ffi_cif.rtype used? */
     if (ecif->cif->rtype->type == FFI_TYPE_STRUCT)
     {
-        /* wrong for NEC VE (struct might be larger */
-        // size_t z = ecif->rsize; // ??
-	    // how ??? memcpy (argp, *p_argv, z); /* TODO: handle struct alignment > 8 */
-        argp += sizeof (UINT64);
+        FFI_ASSERT( regn == 0 && reginfo < 0 );
+#if 0
+        *(char*)stkreg = *ecif->rvalue;
+        stkreg += sizeof (char*);
+        ++regn;
+
+        size_t z = ecif->cif->rtype->size;
+        memcpy (ecif->rvalue, stkarg, z); /* struct content -> stkarg */
+        stkarg += z;
+#else
+        FFI_ASSERT( ecif->rvalue != NULL );
+        *(UINT64*)stkreg = (UINT64)ecif->rvalue;    /* %s0 points at return-struct mem (alloca) */
+#endif
+        STKREG_NEXT;
     }
 #endif
 
     avn = ecif->cif->nargs;
     p_argv = ecif->avalue;
 
+    debug(3," prep_args: ");
     for (i = 0, p_arg = ecif->cif->arg_types; i < avn; i++, p_arg++, p_argv++)
     {
         size_t z;
         int align;
 
         int type = (*p_arg)->type;
+        //debug(3,"\n   a%u[%s]%s",(unsigned)i,ffi_type_detail(*p_arg),ffi_avalue_str(*p_arg,*p_argv));
 
         Argclass cls = argclass(*p_arg); /* VE_REGISTER/REFERENCE/BOTH */
-        if( cls == VE_REGISTER
-                /* and there are enough registers? who checks? maybe machdep? */
-          ){
+#if defined(FFI_NO_STRUCTS) && !FFI_NO_STRUCTS
+        if( type == FFI_TYPE_STRUCT ){
+            FFI_ASSERT( type == FFI_TYPE_STRUCT ); /* VE has no special small-struct handling */
+            FFI_ASSERT( cls == VE_REFERENCE )
+            FFI_ASSERT("struct args TBD" == NULL);
             continue;
         }
+#endif
+        FFI_ASSERT( cls == VE_REGISTER || cls == VE_BOTH);
 
         z = (*p_arg)->size;
         align = (*p_arg)->alignment;
-        if (z < sizeof (UINT64))
+
+        if (z <= sizeof (UINT64))
         {
+            /* these types are passed as single-register (if possible) */
+            union uarg_t {
+                UINT64 r1;
+                float f[2];
+                double d;
+            } val;
+            val.r1 = 0UL;
+
             switch (type)
             {
+
                 case FFI_TYPE_SINT8:
-                    *(SINT64 *) argp = (SINT64) *(SINT8 *)(*p_argv);
+                    *(SINT64*) &val.r1 = (SINT64) *(SINT8 *)(*p_argv);
                     break;
 
                 case FFI_TYPE_UINT8:
-                    *(UINT64 *) argp = (UINT64) *(UINT8 *)(*p_argv);
+                    *(UINT64 *) &val.r1 = (UINT64) *(UINT8 *)(*p_argv);
                     break;
 
                 case FFI_TYPE_SINT16:
-                    *(SINT64 *) argp = (SINT64) *(SINT16 *)(*p_argv);
+                    *(SINT64 *) &val.r1 = (SINT64) *(SINT16 *)(*p_argv);
                     break;
 
                 case FFI_TYPE_UINT16:
-                    *(UINT64 *) argp = (UINT64) *(UINT16 *)(*p_argv);
+                    *(UINT64 *) &val.r1 = (UINT64) *(UINT16 *)(*p_argv);
                     break;
-                case FFI_TYPE_STRUCT:
-#if defined(FFI_NO_STRUCTS)
-                    FFI_ASSERT(NULL=="not expecting any structs");
-#else
-                    debug(3,"prep_args: NEC VE does not optimize small structs (no-op)");
-                    //memcpy (argp, *p_argv, z); /* TODO: handle struct alignment > 8 */
-#endif
+
+                case FFI_TYPE_INT:
+                case FFI_TYPE_SINT32:
+                    *(SINT64*) &val.r1 = (SINT64) *(SINT32 *)(*p_argv);
                     break;
+
+                case FFI_TYPE_UINT32:
+                    *(UINT64*) &val.r1 = (UINT64) *(UINT32 *)(*p_argv);
+                    break;
+
+                case FFI_TYPE_SINT64:
+                    *(SINT64*) &val.r1 = (SINT64) *(SINT32 *)(*p_argv);
+                    break;
+
+                case FFI_TYPE_UINT64:
+                    *(UINT64*) &val.r1 = (UINT64) *(UINT32 *)(*p_argv);
+                    break;
+
+                case FFI_TYPE_FLOAT: /* zeroes in 'other' half */
+                    /*val.r1   = 0UL;*/
+                    val.f[0] = *(float*)(*p_argv);
+                    break;
+
+                case FFI_TYPE_DOUBLE:
+                    val.d = *(double *)(*p_argv);
+                    break;
+
+                case FFI_TYPE_POINTER:
+                    *(SINT64*) val.r1 = (SINT64) (*p_argv);
+
                 default:
-                    FFI_ASSERT(0);
+                    FFI_ASSERT("unhandled small type in ffi_prep_args" == NULL);
             }
-            argp += sizeof (UINT64);
+            if( reginfo == i ){ /* is this a register value? */
+                *(UINT64*)stkreg = val.r1;
+                debug(3," r%lu", (long unsigned)val.r1);
+                STKREG_NEXT;
+                //if( cls == VE_REGISTER )
+                //    continue; /* ONLY in register */
+            }
+            /* store in arg space ... */
+            *(UINT64*)stkarg = val.r1;
+            debug(3," stk%lu",(void*)stkarg, (unsigned long)val.r1);
+            stkarg += 8;
+        }else if( type ==  FFI_TYPE_LONGDOUBLE ){
+            FFI_ASSERT("prep_args FFI_TYPE_LONGDOUBLE TBD" == NULL);
+        }else if( type == FFI_TYPE_COMPLEX ){
+            FFI_ASSERT("prep_args FFI_TYPE_COMPLEX TBD" == NULL);
         }
-      else if (z == sizeof (UINT32) && align == sizeof (UINT32))
-      {
-          switch ((*p_arg)->type)
-          {
-              case FFI_TYPE_INT:
-              case FFI_TYPE_SINT32:
-                  *(SINT64 *) argp = (SINT64) *(SINT32 *) (*p_argv);
-                  break;
-
-              case FFI_TYPE_FLOAT:
-              case FFI_TYPE_POINTER:
-              case FFI_TYPE_UINT32:
-#if !defined(FFI_NO_STRUCTS) 
-              case FFI_TYPE_STRUCT:
-#endif
-                  *(UINT64 *) argp = (UINT64) *(UINT32 *) (*p_argv);
-                  break;
-
-              default:
-                  FFI_ASSERT(0);
-                  break;
-          }
-          argp += sizeof (UINT64);
-      }
-        else if (z == sizeof (UINT64)
-                && align == (int)sizeof (UINT64)
-                && ((intptr_t) *p_argv & (sizeof (UINT64) - 1)) == 0)
-        {
-            *(UINT64 *) argp = *(UINT64 *) (*p_argv);
-            argp += sizeof (UINT64);
-        }
-        else
+#if 0
         {
             int n = (z + sizeof (UINT64) - 1) / sizeof (UINT64);
-
-            memcpy (argp, *p_argv, z);
-            argp += n * sizeof (UINT64);
+            memcpy (stkarg, *p_argv, z);
+            stkarg += n * sizeof (UINT64);
         }
+#endif
     }
+    debug(3,"\n");
 
+    debug(1, "%s %s: stack = %p, ecif = %p, bytes = %u, rvalue=%p, avalue=%p\n      ecif->cif=%s\n",
+            "END", __FUNCTION__, stack, ecif, ecif->cif->bytes, ecif->rvalue, ecif->avalue,
+            ffi_cif_str(ecif->cif));
+    if(ecif->avalue != NULL) debug(1, "      %s\n", ffi_avalues_str(ecif->cif,ecif->avalue));
     return;
 }
 
-/* Perform machine dependent cif processing */
+/* Perform machine dependent cif processing.
+ * ffi_prep_args        is called for every invocation, while
+ * ffi_prep_cif_machdep is called just once.
+ * So here we set flags that simplify setting up the stack in ffi_prep_args.
+ * 1. flags2 is used to remember which args get passed in registers
+ * 2. TODO (flags3?   For a register arg in flags2, is it a BOTH arg?)
+ * */
 ffi_status ffi_prep_cif_machdep(ffi_cif *cif)
 {
-    int i;
+    UINT8 i, cif_nargs=(UINT8)cif->nargs;
     int size, type;
     int n;
-    int greg;
+    UINT8 greg=0;
+    UINT64 flags2 = 0UL;
     //int fpair = -1;
 #if defined(FFI_EXTRA_CIF_FIELDS)
     int j=0;
     int m;
+    cif->flags2 = 0UL;
 #endif
 
-    debug(2,"ve: ffi_prep_cif_machdep(ffi_cif*) BEGIN\n%s\n", ffi_cif_str(cif));
-    /*greg = (argclass(cif->rtype) == VE_REFERENCE ? 1 : 0);*/
-    greg = argclass(cif->rtype);
+    debug(2,"ve: ffi_prep_cif_machdep(ffi_cif*) %s (cif->bytes=%lu)\n      %s\n",
+            "BEGINS", (unsigned long)cif->bytes, ffi_cif_str(cif));
+
     /* VE_REGISTER --> 0
        return value in %s0.., no regs implicated for the call */
     /* VE_REFERENCE --> 1
        caller provides space on stack and passes address in %s0 as if
        this were a "hidden" first argument to the callee */
-    FFI_ASSERT(greg != VE_BOTH);
-#if defined(FFI_EXTRA_CIF_FIELDS)
-    cif->flags2 = 0;
-#endif /*FFI_EXTRA_CIF_FIELDS*/
-
-    /* ? which args get passed in register */
-    for (i = 0; i < cif->nargs; ++i)
-    {
-        type = (cif->arg_types)[i]->type;
-        switch (type)
-        {
-            case FFI_TYPE_LONGDOUBLE:
-                if(greg + (greg%2) + 2 >= NGREGARG) /* 2 gregs & must start in even greg */
-                    debug(1,"ve: ffi_prep_cif_machdep(ffi_cif*) long double TBD");
-#ifdef FFI_DEBUG
-                ffi_stop_here();
-#endif
-                break;
-
-            default:
-                size = (cif->arg_types)[i]->size;
-                if (size < sizeof (UINT64))
-                    cif->bytes += sizeof (UINT64) - size;
-                n = (size + sizeof (UINT64) - 1) / sizeof (UINT64);
-                if (greg >= NGREGARG)
-                    continue;
-                else if (greg + n - 1 >= NGREGARG)
-                    greg = NGREGARG;
-                else
-                    greg += n;
-#if defined(FFI_EXTRA_CIF_FIELDS)
-                for (m = 0; m < n; m++)
-                    cif->flags2 += FFI_TYPE_INT << (2 * j++);
-#endif /*FFI_EXTRA_CIF_FIELDS*/
-                break;
-        }
+    /* greg = argclass(cif->rtype); */  /* too tricky, and want to set flags2! */
+    if( argclass(cif->rtype) == VE_REFERENCE ){
+        FFI_ASSERT( cif->rtype->type == FFI_TYPE_STRUCT );
+        /* use %s0 as a pointer register for return value */
+        flags2 = 0x80;  /* first arg 0x80 ==> return value pointer */
+        greg=1;
+        debug(2," %s:%lx:%u","ret_REF",flags2,(unsigned)greg);
     }
 
-    /* Set the return type flag */
+    /* ? which args get passed in register */
+    /* C limits # argumnents to a function to 127 */
+    /* So for 8 register-args, we can have a 1-bit flag + 7-bit arg# */
+    /* The 7-bit arg#s must be increasing. (if not treat as "skip" reg) */
+    /* Multi-register args repeat the flags value */
+    /* If the flag bit is set, this could mean "skip" (or for %s0 "retval ptr") */
+    /* If two consecutive "skip" flags occur, there will be no more register args */
+    for (i = 0; i < cif_nargs; ++i)
+    {
+        int regs = 1;
+        ffi_type* ffi_type_i = (cif->arg_types)[i];
+        debug(3,"i=%d[%s],greg=%d ",(int)i,ffi_type_detail(ffi_type_i), (int)greg);
+        int klas = argclass(ffi_type_i);
+
+        if(greg >= NGREGARG) break;
+        type = ffi_type_i->type;
+        size = ffi_type_i->size;
+        if( klas == VE_REGISTER ){
+            switch(type){
+                case FFI_TYPE_STRUCT:
+                    FFI_ASSERT(klas == VE_REFERENCE);
+                    if (size < sizeof (UINT64))
+                        cif->bytes += sizeof (UINT64) - size;
+                    n = (size + sizeof (UINT64) - 1) / sizeof (UINT64);
+                    if (greg >= NGREGARG){
+                        debug(3," %s:%lx:%u","REF",flags2,(unsigned)greg);
+                        continue;
+                    }else if (greg < NGREGARG){ /* structs use 1 reg, as a pointer */
+                        flags2 += (UINT64)i<<(greg++*8); /* this greg holds arg 'i' (ptr-to-value) */
+                        debug(3," %s:%lx:%u","REF",flags2,(unsigned)greg);
+                    }
+                    break;
+                case FFI_TYPE_LONGDOUBLE: /* also for long double _Imaginary */
+                    regs=2; /* and start on even reg */
+                    if( greg + (greg&1) + regs <= NGREGARG ){ /* have enough regs! */
+                        if( greg&1 ){
+                            flags2 += 0xffLU<<(greg++*8); /* "skip" register (zero?) */
+                            debug(3," %s:%lx:%u","ldSKIP",flags2,(unsigned)greg);
+                        }
+                        flags2 += (UINT64)i<<(greg++*8); /* upper part */
+                        flags2 += (UINT64)i<<(greg++*8); /* lower part */
+                        debug(3," %s:%lx:%u","ldREG",flags2,(unsigned)greg);
+                    }else{
+                        /* "If there are no registers available for arguments,
+                         * the **remaining** arguments are passed by the
+                         * parameter area on the stack */
+                        for( ; greg<NGREGARG; ++greg ) flags2 += 0xffLU<<(greg*8); /* "skip" */
+                        greg = NGREGARG;
+                        debug(3," %s:%lx:%u","Done",flags2,(unsigned)greg);
+                    }
+                    break;
+#if 0
+                case FFI_TYPE_LONGDOUBLE_COMPLEX:
+                    regs=4;  /* and start on even reg */
+                    if( greg + (greg&1) + regs <= NGREGARG ){ /* registers available! */
+                        greg += (greg&1); /* maybe skip a reg */
+                        ; //reg_narg[reginf] = (klas<<14) + (greg<<8) & ((UINT8)i<<0);
+                        greg += regs;
+                    }else{
+                        greg = NGREGARG;
+                    }
+                    break;
+#endif
+                default:
+                    FFI_ASSERT(klas != VE_REFERENCE);
+                    FFI_ASSERT(klas == VE_REGISTER); /* size must be <=8, or 16, or 32 */
+                    if (size < sizeof (UINT64)){
+                        /* The default cif->bytes seems to be OK for VE (no fixup required ?) */
+                        ;//cif->bytes += sizeof (UINT64) - size;
+                    }else{
+                        FFI_ASSERT( size == 8 ); /* treat larger ones case-by-case */
+                    }
+                    n = (size + sizeof (UINT64) - 1) / sizeof (UINT64); /* 1 except for long specials types */
+                    if (greg >= NGREGARG){
+                        debug(3," cont:n=%u ",(unsigned)n);
+                        continue;
+                    }else if (greg + n > NGREGARG){ /* overflow, do not pass in reg */
+                        for( ; greg<NGREGARG; ++greg ) flags2 += 0xffLU<<(greg*8); /* "skip" */
+                        greg = NGREGARG;
+                        debug(3," %s:%lx:%u","DONE",flags2,(unsigned)greg);
+                    }else{
+                        n += greg;  /* end register# for this arg */
+                        do{
+                            flags2 += (UINT64)i<<(greg++*8); /* this greg holds arg 'i' */
+                            debug(3," %s:%lx:%u","REG",flags2,(unsigned)greg);
+                        }while( greg < n );
+                    }
+#if 0 && defined(FFI_EXTRA_CIF_FIELDS) /* this was for some other chip */
+                    for (m = 0; m < n; m++)
+                        cif->flags2 += FFI_TYPE_INT << (2 * j++);
+#endif /*FFI_EXTRA_CIF_FIELDS*/
+                    break;
+            }
+        }
+#if 0 && defined(FFI_NO_STRUCTS) && !FFI_NO_STRUCTS
+        case FFI_TYPE_STRUCT: /* argclass is REFERENCE */
+        FFI_ASSERT(0);
+        break;
+#endif
+    }
+
+    if( greg < NGREGARG ){
+        for( ; greg<NGREGARG; ++greg ){
+            flags2 += (0xffLU<<(greg*8)); /* "skip" */
+        }
+        debug(3," %s:%lx:%u","DoNe",flags2,(unsigned)greg);
+    }
+    debug(3,"\n");
+#if defined(FFI_EXTRA_CIF_FIELDS)
+    cif->flags2 = flags2;
+#endif /*FFI_EXTRA_CIF_FIELDS*/
+
+
+    /* Set the return type flag XXX CHECKME */
     switch (cif->rtype->type)
     {
 #if defined(FFI_NO_STRUCTS) && !FFI_NO_STRUCTS
         case FFI_TYPE_STRUCT: /* there is no special handling for small-structs*/
-            cif->bytes += 8;  /* one pointer ?? */
+            /*cif->bytes += cif->type->size;*/
+            /* are structs on stack, or really on "temporary space"? */
+            /* I'll try alloca for the space, and the ptr-->%s0 */
 #endif
         case FFI_TYPE_VOID:
         case FFI_TYPE_FLOAT:
@@ -408,14 +672,17 @@ ffi_status ffi_prep_cif_machdep(ffi_cif *cif)
             break;
 
         default:
-            cif->flags = FFI_TYPE_INT;
+            cif->flags = cif->rtype->type; /* ?? */
             break;
     }
 
+    cif->bytes += 64; /* ALWAYS provide a register area (fixed size, for now) */
+
     /* VE ABI 0.32 requires stack frame size & alignment of 16 */
-    FFI_ALIGN( cif->bytes, 16 );
-    debug(2,"ve: ffi_prep_cif_machdep(ffi_cif*) DONE (cif->bytes=%lu)\n%s\n",
-            (unsigned long)cif->bytes, ffi_cif_str(cif));
+    cif->bytes = FFI_ALIGN( cif->bytes, 16 );
+
+    debug(2,"ve: ffi_prep_cif_machdep(ffi_cif*) %s (cif->bytes=%lu)\n      %s\n",
+            "ENDS", (unsigned long)cif->bytes, ffi_cif_str(cif));
     return FFI_OK;
 }
 
@@ -432,19 +699,63 @@ extern void ffi_call_SYSV(void (*)(char *, extended_cif *),
 /*@=declundef@*/
 /*@=exportheader@*/
 
-void ffi_call(/*@dependent@*/ ffi_cif *cif, 
+void ffi_call_SYSV_example(void (*prep_args)(char *, extended_cif *), 
+			  /*@out@*/ extended_cif *ecif, 
+			  unsigned bytes, unsigned flags,
+#if defined(FFI_EXTRA_CIF_FIELDS)
+              long unsigned flags2,
+#endif /*FFI_EXTRA_CIF_FIELDS*/
+			  /*@out@*/ unsigned *rvalue, 
+			  void (*fn)(void))
+{
+    debug(2,"ve: ffi_call_SYSV_example ('C' stub)\n");
+    char* fn_stack = (char*)alloca(bytes);
+    prep_args( fn_stack, ecif );
+    /* asm copy mem reg area into registers */
+    /* invoke fn in current stack frame ? (This is why we need assembler) */
+}
+void ffi_call_example(/*@dependent@*/ ffi_cif *cif, 
 	      void (*fn)(void), 
 	      /*@out@*/ void *rvalue, 
 	      /*@dependent@*/ void **avalue)
 {
-    /* We might not need an extended_cif at all */
-    debug(2,"ve: ffi_call(ffi_cif*, void(*fn)(), void*rvalue, void**avalue)) BEGINS\n cif = %s\n fn = 0x%lx\n rvalue = 0x%lx\n avalue=0x%lx\n", ffi_cif_str(cif), (long)fn, (long)rvalue, (long(avalue));
     extended_cif ecif;
     UINT64 trvalue;     /* temporary rvalue */
 
     /* argument values */
     ecif.cif = cif;
-    if( cif->nargs == 0 ) ecif.avalue = NULL; /* avalues is ignored */
+    if( cif->nargs == 0 ) ecif.avalue = NULL; /* avalue is ignored */
+    else ecif.avalue = avalue;
+    /* return value */
+    ecif.rvalue = rvalue;
+    ffi_call_SYSV_example(ffi_prep_args, &ecif, cif->bytes, cif->flags,
+#if defined(FFI_EXTRA_CIF_FIELDS)
+            cif->flags2,
+#endif /*FFI_EXTRA_CIF_FIELDS*/
+            ecif.rvalue, fn);
+
+    debug(2,"ve: ffi_call_example(ffi_cif*, void(*fn)(), void*rvalue, void**avalue)) ENDS %s\n      cif = %s\n      fn = %p, rvalue = %p, avalue=%p\n      %s",
+            "(ffi_call_example)",
+            ffi_cif_str(cif), fn, rvalue, avalue, ffi_avalues_str(cif,avalue));
+}
+
+
+void ffi_call(/*@dependent@*/ ffi_cif *cif, 
+	      void (*fn)(void), 
+	      /*@out@*/ void *rvalue, 
+	      /*@dependent@*/ void **avalue)
+{
+#define FFI_USE_ASSEMBLER 1
+    /* We might not need an extended_cif at all */
+    debug(2,"ve: %s ffi_call(ffi_cif*, void(*fn)(), void*rvalue, void**avalue)) %s\n      cif = %s\n      fn = %p, rvalue = %p, avalue=%p\n      %s\n",
+            "BEG",(FFI_USE_ASSEMBLER? "(sysv.S)":"(ffi_call_SYSV_example)"),
+            ffi_cif_str(cif), fn, rvalue, avalue, ffi_avalues_str(cif,avalue));
+    extended_cif ecif;
+    UINT64 trvalue;     /* temporary rvalue */
+
+    /* argument values */
+    ecif.cif = cif;
+    if( cif->nargs == 0 ) ecif.avalue = NULL; /* avalue is ignored */
     else ecif.avalue = avalue;
 
     /* return value */
@@ -468,11 +779,23 @@ void ffi_call(/*@dependent@*/ ffi_cif *cif,
     switch (cif->abi) 
     {
         case FFI_SYSV:
+#if FFI_USE_ASSEMBLER /* try out the sysv.S assembler code */
             ffi_call_SYSV(ffi_prep_args, &ecif, cif->bytes, cif->flags,
 #if defined(FFI_EXTRA_CIF_FIELDS)
                     cif->flags2,
 #endif /*FFI_EXTRA_CIF_FIELDS*/
                     ecif.rvalue, fn);
+#else
+            ffi_call_SYSV_example(ffi_prep_args, &ecif, cif->bytes, cif->flags,
+#if defined(FFI_EXTRA_CIF_FIELDS)
+                    cif->flags2,
+#endif /*FFI_EXTRA_CIF_FIELDS*/
+                    ecif.rvalue, fn);
+#endif
+            debug(3,"\n  rvalue[%s] : %p --> %s",
+                    ffi_type_detail(cif->rtype),
+                    (void*)ecif.rvalue,
+                    ffi_avalue_str(cif->rtype,ecif.rvalue));
             break;
         default:
             FFI_ASSERT(0);
@@ -485,7 +808,9 @@ void ffi_call(/*@dependent@*/ ffi_cif *cif,
             && return_type (cif->rtype) != FFI_TYPE_STRUCT)
         memcpy (rvalue, &trvalue, cif->rtype->size);
 #endif
-    debug(2,"ve: ffi_call(ffi_cif*, void(*fn)(), void*rvalue, void**avalue)) ENDS\n cif = %s\n fn = 0x%lx\n rvalue = 0x%lx\n avalue=0x%lx\n", ffi_cif_str(cif), (long)fn, (long)rvalue, (long(avalue));
+    debug(2,"ve: %s ffi_call(ffi_cif*, void(*fn)(), void*rvalue, void**avalue)) %s\n      cif = %s\n      fn = %p, rvalue = %p, avalue=%p\n      %s\n\n",
+            "ENDS",(FFI_USE_ASSEMBLER? "(sysv.S)":"(ffi_call_SYSV_example)"),
+            ffi_cif_str(cif), fn, rvalue, avalue, ffi_avalues_str(cif,avalue));
 }
 
 #if FFI_CLOSURES

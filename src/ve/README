@@ -1,0 +1,18 @@
+[XVE a1sb2_007 vt]$ (cd build/libffi/src/libffi/testsuite/libffi.bhaible/ && gdb --args test-call)
+
+br ffi_call_SYSV
+run
+br sysv_save
+br sysv_prep
+br sysv_restore
+br sysv_invoke
+br sysv_retval
+br sysv_epilogue
+br sysv_ret
+
+c
+info registers s0 s1 s2 s3 s4 s5 s6 s7 sl fp lr sp
+disassemble
+
+-------------------------------------------------------------------
+
