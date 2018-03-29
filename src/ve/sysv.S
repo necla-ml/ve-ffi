@@ -106,6 +106,19 @@ LABEL:	.asciz STRING; \
 	.balign 8; \
 	.text
 
+#define PRINT_MSG_U64( NAME, LOAD_S1... ) \
+	LOAD_S1; \
+	DEFINE_STRING( sysv_str_##NAME, #NAME ); \
+	TXT_ADDRESS( %s0, sysv_str_##NAME ); \
+	bsic	%lr,(,%s28)
+
+#define PRINT_MSG_U64X( NAME, XSTRING, LOAD_S1... ) \
+	LOAD_S1; \
+	DEFINE_STRING( sysv_str_##NAME, XSTRING ); \
+	TXT_ADDRESS( %s0, sysv_str_##NAME ); \
+	bsic	%lr,(,%s28)
+
+
 	.text
 #if 0
 ####### caller's stack frame
@@ -309,15 +322,11 @@ sysv_invoke:
 	         and blind-copy into s0..s7. */
 	lea	%s0,176(,%sp)	#	%s0 = char *stack, 1st in Parameter Area for callee
 	adds.l	%s1,%s20,(58)1	#	cif->bytes - 64 ??
-#if 0 // NO debug
+#if 0 /* no debug */
 	adds.l	%s63,%s0,%s1	# %s33 : char* stkreg = stack + cif->bytes - 64
-#else // debug... v.2
-	/* Note: must use s18..33 because bsic (debug) clobbers s63 tmp regs! */
+#else /* debug: need spill register */
 	adds.l	%s33,%s0,%s1	# %s33 : char* stkreg = stack + cif->bytes - 64
-	or	%s1,0,%s33
-	DEFINE_STRING( str_stkreg, "s33:stkreg" )
-	TXT_ADDRESS( %s0, str_stkreg )
-	bsic	%lr,(,%s28)	# print_msg_u64
+	PRINT_MSG_U64(s33_stkreg,  or %s1,0,%s33 )
 	or	%s63,0,%s33
 #endif
 	ld	%s0,0*8(,%s63)	# mirror stkreg --> %s0..7
@@ -341,65 +350,49 @@ sysv_inv2:				/* CALL "fn" */
 	st	%s3,-1*8(,%fp)
 
 sysv_dbg:
-#if 0 // DEBUG
-	;#SAVE_S0_TO_S7;		# spill into s18..25
-	bsic	%lr,(,%s27)	# print_s0
-	;# print rvalue (ptr that will get return value)
-	or	%s0,%s23,(0)1
-	bsic	%lr,(,%s27)
-	;#RESTORE_S0_TO_S7;	# resture from s18..25
-#elif 1 // debug v.2
-	or	%s1,0,%s0
-	DEFINE_STRING( str_retval, "%s0=retval" )
-	TXT_ADDRESS( %s0, str_retval )
-	bsic	%lr,(,%s28)	# print_msg_u64
-	or	%s1,0,%s23
-	DEFINE_STRING( str_ptr_rvalue, "%s23:rvalue@" )
-	TXT_ADDRESS( %s0, str_ptr_rvalue )
-	bsic	%lr,(,%s28)	# print_msg_u64
-#endif // DEBUG
-
+#if 1 /* debug */
+	PRINT_MSG_U64(s0_retval,  or %s1,0,%s0)
+	PRINT_MSG_U64(s23_rvalue_ptr,  or %s1,0,%s23)
 #endif
+#endif /* FUNCTIONALITY >= 2 */
 	
 #if FUNCTIONALITY >= 3
 sysv_retval:
 	/* handle return value ............................. */
 	/* or	%s0,0,return_value */
 	;# (*rvalue) = %s0
-#if 1 // obtain ecif->cif->rtype->type. NO. This is in flags (%s21)
+#if 0 /* obtain ecif->cif->rtype->type ?? */
 	/* I think this would do it:
 		or	%s63,0,%s19	# ecif (ptr)
 		ld	%s62,0(0,%s63)	# ecif->cif
 		ld	%s61,16(0,%s62)	# ecif->cif->rtype
 		ld2b.zx	%s60,10(0,%s61)	# ecif->cif->type.type
 	*/
-	or	%s1,0,%s21	# flags ( == ecif->cif->rtype->type
-	DEFINE_STRING( str_rtype, "rtype" )
-	TXT_ADDRESS( %s0, str_rtype )
-	bsic	%lr,(,%s28)	# print_msg_u64
 #endif
+	PRINT_MSG_U64(s21_flags,  or %s1,0,%s21) # %s21 = flags == ecif->cif->rtype->type
 	breq.l.nt	%s23,0,.L_BoE	# rvalue == NULL? skip rvalue
 	breq.w.t	FFI_TYPE_VOID,%s21, sysv_ret2
 .L1.notvoid:
-	;#ld	%s0,-4*8(,%fp)	# retrieve retval
-	;#ld	%s1,-3*8(,%fp)
-	;#ld	%s2,-2*8(,%fp)
-	;#ld	%s3,-1*8(,%fp)
+	ld	%s0,-4*8(,%fp)	# retrieve retval [opt]
+	ld	%s1,-3*8(,%fp)
+	ld	%s2,-2*8(,%fp)
+	ld	%s3,-1*8(,%fp)
 #if 1
 	brne.w.t	FFI_TYPE_FLOAT,%s21, .L1.notfloat
 sysv_rfloat:
 	ld	%s0,-4*8(,%fp)	# retrieve retval
 	stu	%s0,0(,%s23)	# register-float ---> 4-byte float memory
-	/* debug... */
-	or	%s1,0,%s0	# flags ( == ecif->cif->rtype->type
+#if 0 /* debug */
+	or	%s1,0,%s0	# retval-float
 	DEFINE_STRING( str_rfloat, "rfloat" )
 	TXT_ADDRESS( %s0, str_rfloat )
 	bsic	%lr,(,%s29)	# print_msg_float
-	ldu	%s1,0(,%s23)	# flags ( == ecif->cif->rtype->type
-	DEFINE_STRING( str_rdouble, "rdouble" )
-	TXT_ADDRESS( %s0, str_rdouble )
-	bsic	%lr,(,%s30)	# print_msg_float
-	br.w	sysv_ret2
+	//ldu	%s1,0(,%s23)	# flags ( == ecif->cif->rtype->type
+	//DEFINE_STRING( str_rdouble, "rdouble" )
+	//TXT_ADDRESS( %s0, str_rdouble )
+	//bsic	%lr,(,%s30)	# print_msg_float
+#endif
+	br.w	sysv_ret1
 .L1.notfloat:
 #endif
 #if 0
@@ -409,7 +402,7 @@ sysv_rldouble:
 	ld	%s1,-3*8(,%fp)
 	st	%s0,0(,%s23)
 	st	%s1,8(,%s23)
-	br.w	sysv_ret2
+	br.w	.L_BoE
 .L1.notldouble:
 #endif
 #if 0
@@ -419,16 +412,31 @@ sysv_rcomplex: # double complex ... ?
 	ld	%s1,-3*8(,%fp)
 	st	%s0,0(,%s23)
 	st	%s1,8(,%s23)
-	br.w	sysv_ret2
+	br.w	.L_BoE
 .L1.notcomplex:
 #endif
-#if 0
+#if 1
 	brne.w.t	FFI_TYPE_STRUCT,%s21,.L1.notstruct
-	ld	%s0,-4*8(,%fp)	# retrieve retval = addr with content
+sysv_rstruct:
+	PRINT_MSG_U64X( struct_TBD, "*** struct TBD ***", ld %s0,-4*8(,%fp))	# retrieve retval = addr with content
 	/* size = ? */
-	/* memcpy */
-	br.w	sysv_ret2
+	/* memcpy? for example XXX (wrong) */
+	ld	%s0,-4*8(,%fp)	# retrieve retval = addr with content
+	ld	%s1,0(,%s0)	# retrieve first 64-bits of struct/union...
+	st	%s1,0(,%s23)	# (*rvalue) = %s0  (ok for 8-byte return type)
+	addu.l	%s1,8,%s1
+	ld	%s0,-4*8(,%fp)	# retrieve retval = addr with content
+	br.w	sysv_ret1
 .L1.notstruct:
+#endif
+#if 1
+	brne.w.t	FFI_TYPE_POINTER,%s21,.L1.notpointer
+sysv_rpointer:
+	PRINT_MSG_U64( rpointer,  ld %s0,-4*8(,%fp))	# %s0 = void* ret
+	ld	%s0,-4*8(,%fp)	# %s0 = void* ret
+	st	%s0,0(,%s23)	# (*rvalue) = ret
+	br.w	sysv_ret1
+.L1.notpointer:
 #endif
 	/* ###################### */
 	/* <= 8-byte scalar types [except FLOAT] are OK with just: */
@@ -438,23 +446,20 @@ sysv_rcomplex: # double complex ... ?
 	;#ld	%s3,-1*8(,%fp)
 	st	%s0,0(,%s23)	# (*rvalue) = %s0  (ok for 8-byte return type)
 	/* ###################### */
-
-#if 0 // DEBUG
-	ld	%s0,0(,%s23)	# print *rvalue (as uint64)
-	bsic	%lr,(,%s27)	# print_s0
-#elif 1 // debug v.2
-	ld	%s1,0(,%s23)	# print *rvalue (as uint64)
-	DEFINE_STRING( str_rvalue, "*rvalue" )
-	TXT_ADDRESS( %s0, str_rvalue )
-	bsic	%lr,(,%s28)	# print_msg_u64
+#if 1 /* debug */
+	PRINT_MSG_U64X( u64_rvalue, "*rvalue", ld %s1,0(,%s23))	# print *rvalue (as uint64)
+	br.w sysv_ret1
+#else
+	br.w .L_BoE # reg return value already in place
 #endif
 
-
-sysv_ret2:
-	ld	%s0,-4*8(,%fp)	# retrieve retval [change order if incorrect for multibyte]
-	ld	%s1,-3*8(,%fp)
-	ld	%s2,-2*8(,%fp)
+sysv_ret4:
 	ld	%s3,-1*8(,%fp)
+	ld	%s2,-2*8(,%fp)
+sysv_ret2:
+	ld	%s1,-3*8(,%fp)
+sysv_ret1:
+	ld	%s0,-4*8(,%fp)	# retrieve retval [change order if incorrect for multibyte]
 #endif /* FUNCTIONALITY >= 3 */
 
 sysv_epilogue:

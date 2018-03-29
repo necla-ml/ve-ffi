@@ -58,8 +58,10 @@ done:
     print_s0(s0);
 }
 void print_msg_u64(void const* const s0_msg, UINT64 const s1_u64){
-    debug(2, " %s:0x%lx,%lu,%ld,%f ", (char const*)s0_msg, (long unsigned)s1_u64,
-            (long int)s1_u64, (long unsigned)s1_u64, *(float*)(void*)&s1_u64);
+    debug(2, " %s:0x%lx,%lu,%ld ", (char const*)s0_msg, (long unsigned)s1_u64,
+            (long int)s1_u64, (long unsigned)s1_u64);
+    //debug(2, " %s:0x%lx,%lu,%ld,%f ", (char const*)s0_msg, (long unsigned)s1_u64,
+    //        (long int)s1_u64, (long unsigned)s1_u64, *(float*)(void*)&s1_u64);
 }
 void print_msg_u64_example(void const* const s0_msg, UINT64 const s1_u64){
     print_msg_u64((char const*)s0_msg, s1_u64);
@@ -228,7 +230,7 @@ static char const* ffi_cif_str( ffi_cif const* cif){
             DPRINT("%s%s", (i==0?"{":","), ffi_type_detail(cif->arg_types[i]));
         DPRINT("}");
     }
-    DPRINT(", rtype=");
+    DPRINT("\n\t\t, rtype=");
     if(cif->rtype==NULL) DPRINT("NULL");
     else DPRINT("%p[%s]", (void*)cif->rtype, ffi_type_detail(cif->rtype));
     DPRINT(", bytes:%u, flags:%u"
@@ -354,8 +356,11 @@ void ffi_prep_args(char *stack, extended_cif const* const ecif)
 #error "NEC VE relies on machdep having deduce which args go in registers"
 #endif
     register char *stkreg;      /* for now, last 64 bytes of ecif->cif->bytes are register arg mirrors */
+    char* stkreg_beg;
+    char* stkreg_end;
     register unsigned int regn;
     register ffi_type **p_arg;
+
 
     /* ecif = { ffi_cif*, void*rvalue, void**avalue } is used in callback from assembly */
     debug(1, "%s %s: stack = %p, ecif = %p, bytes = %u, rvalue=%p, avalue=%p\n      ecif->cif=%s\n",
@@ -365,6 +370,8 @@ void ffi_prep_args(char *stack, extended_cif const* const ecif)
 
     stkarg = stack;                           /* non-register args area */
     stkreg = stack + ecif->cif->bytes - 64;   /* register mirror area %s0..%s7 */
+    stkreg_beg = stkreg;        /* overrun check:  stkarg <= stkreg_beg */
+    stkreg_end = stkreg + 64;   /* overrun check:  stkreg <= stkreg_end */
     /* above shows that -64 as "adds" of M value (58)1 */
     debug(3,"stkreg=%p + %lu + 0x%x = %p\n",
             (void*)stack,(long unsigned)ecif->cif->bytes,
@@ -399,18 +406,8 @@ void ffi_prep_args(char *stack, extended_cif const* const ecif)
     if (ecif->cif->rtype->type == FFI_TYPE_STRUCT)
     {
         FFI_ASSERT( regn == 0 && reginfo < 0 );
-#if 0
-        *(char*)stkreg = *ecif->rvalue;
-        stkreg += sizeof (char*);
-        ++regn;
-
-        size_t z = ecif->cif->rtype->size;
-        memcpy (ecif->rvalue, stkarg, z); /* struct content -> stkarg */
-        stkarg += z;
-#else
         FFI_ASSERT( ecif->rvalue != NULL );
         *(UINT64*)stkreg = (UINT64)ecif->rvalue;    /* %s0 points at return-struct mem (alloca) */
-#endif
         STKREG_NEXT;
     }
 #endif
@@ -480,11 +477,11 @@ void ffi_prep_args(char *stack, extended_cif const* const ecif)
                     break;
 
                 case FFI_TYPE_SINT64:
-                    *(SINT64*) &val.r1 = (SINT64) *(SINT32 *)(*p_argv);
+                    *(SINT64*) &val.r1 = *(SINT64 *)(*p_argv);
                     break;
 
                 case FFI_TYPE_UINT64:
-                    *(UINT64*) &val.r1 = (UINT64) *(UINT32 *)(*p_argv);
+                    *(UINT64*) &val.r1 = *(UINT64 *)(*p_argv);
                     break;
 
                 case FFI_TYPE_FLOAT: /* zeroes in 'other' half */
@@ -497,25 +494,29 @@ void ffi_prep_args(char *stack, extended_cif const* const ecif)
                     break;
 
                 case FFI_TYPE_POINTER:
-                    *(SINT64*) val.r1 = (SINT64) *(void**)(*p_argv);
+                    debug(3," *p_argv=%p ", *(void**)p_argv);
+                    *(SINT64*) &val.r1 = (SINT64) *(void**)p_argv;
                     debug(3," ptr 0x%lx ", (unsigned long)val.r1);
+                    break;
 
                 default:
                     FFI_ASSERT("unhandled small type in ffi_prep_args" == NULL);
             }
             if( reginfo == i ){ /* is this a register value? */
                 *(UINT64*)stkreg = val.r1;
-                //debug(3," r%lu", (long unsigned)val.r1);
-                debug(3," r%s", ffi_avalue_str(*p_arg,(void*)&val));
+                debug(3," r%lu", (long unsigned)val.r1);
+                //debug(3," r%s", ffi_avalue_str(*p_arg,(void*)&val));
                 STKREG_NEXT;
                 //if( cls == VE_REGISTER )
                 //    continue; /* ONLY in register */
+                FFI_ASSERT( stkreg <= stkreg_end );
             }
             /* store in arg space ... */
             *(UINT64*)stkarg = val.r1;
-            //debug(3," stk%lu", (unsigned long)val.r1);
-            debug(3," stk%s", ffi_avalue_str(*p_arg,(void*)&val));
+            debug(3," stk%lu", (unsigned long)val.r1);
+            //debug(3," stk%s", ffi_avalue_str(*p_arg,(void*)&val));
             stkarg += 8;
+            FFI_ASSERT( stkarg <= stkreg_beg );
         }else if( type ==  FFI_TYPE_LONGDOUBLE ){
             FFI_ASSERT("prep_args FFI_TYPE_LONGDOUBLE TBD" == NULL);
         }else if( type == FFI_TYPE_COMPLEX ){

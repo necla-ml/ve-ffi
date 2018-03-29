@@ -9,10 +9,25 @@ br sysv_invoke
 br sysv_retval
 br sysv_epilogue
 br sysv_ret
+br sysv_rfloat
 
 c
 info registers s0 s1 s2 s3 s4 s5 s6 s7 sl fp lr sp
-disassemble
+	i reg s0 s1 s2 s3 s4 s5 s6 s7 sl fp lr sp
+nexti
+	ni
+disassem
+
+commands br sysv_ret2
+	i reg s0 s1 s2 s3
+	p \x s0
+	end
+
+display /x s0
+display /x s1
+display /x s2
+display /x s3
+disable disp 4
 
 -------------------------------------------------------------------
 

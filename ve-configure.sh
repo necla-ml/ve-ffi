@@ -1,4 +1,5 @@
 #PREFIX=`pwd`/install
+#OPTS='-g -O0'
 OPTS='-g2 -O1'
 # do not add -fPIC here. libffi builds both .a and .so
 if [ -f ~/kruus/vt/env.bash ]; then
