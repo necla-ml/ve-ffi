@@ -418,15 +418,26 @@ sysv_rcomplex: # double complex ... ?
 #if 1
 	brne.w.t	FFI_TYPE_STRUCT,%s21,.L1.notstruct
 sysv_rstruct:
-	PRINT_MSG_U64X( struct_TBD, "*** struct TBD ***", ld %s0,-4*8(,%fp))	# retrieve retval = addr with content
+	PRINT_MSG_U64(rstruct, ld %s0,-4*8(,%fp))	# retrieve retval = addr with content
+#if 1 /* New [trick] */
+	/* Note: unlike the compiler-generated code (at -O0 or -O1 I think),
+		which does a double struct copy,
+
+		I pass along the "hidden arg 0" ptr directly to 'fn'
+
+		This means I do NOT need to deal with the struct-copy here
+		(I hope) ... and FFI_TYPE_STRUCT return values can be
+		handled just like any other pointer-return */
+#else
 	/* size = ? */
 	/* memcpy? for example XXX (wrong) */
 	ld	%s0,-4*8(,%fp)	# retrieve retval = addr with content
 	ld	%s1,0(,%s0)	# retrieve first 64-bits of struct/union...
 	st	%s1,0(,%s23)	# (*rvalue) = %s0  (ok for 8-byte return type)
 	addu.l	%s1,8,%s1
-	ld	%s0,-4*8(,%fp)	# retrieve retval = addr with content
-	br.w	sysv_ret1
+#endif
+	/* NB we do not need to store anything into *rvalue */
+	br.w	sysv_ret1	# return 1 register (our hidden-arg1 ptr-to-struct, again)
 .L1.notstruct:
 #endif
 #if 1

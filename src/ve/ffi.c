@@ -181,10 +181,10 @@ static char const* ffi_avalues_str( ffi_cif const* cif, void **avalue ){
         if( n > rem_len ){ rem_len = 0; } \
         else { buf+=n; rem_len-=n; } \
     } while(0)
-    if(cif == NULL) DPRINT("cif==NULL,avalue=%p???",avalue);
-    else if(avalue == NULL) DPRINT("avalue=NULL???");
-    else if(cif->nargs <= 0 ) DPRINT("avalue={}");
-    else if(cif->arg_types==NULL) DPRINT("arg_types==NULL,avalue=%p???",avalue);
+    if(cif == NULL) DPRINT("cif==NULL,avalues=%p???",avalue);
+    else if(avalue == NULL && cif->nargs > 0) DPRINT("avalues=NULL???");
+    else if(cif->nargs <= 0 ) DPRINT("avalues={}");
+    else if(cif->arg_types==NULL && cif->nargs > 0) DPRINT("arg_types==NULL,avalues=%p???",avalue);
     else{
         DPRINT("avalues=");
         for(int i=0; i<cif->nargs; ++i)
@@ -395,7 +395,7 @@ void ffi_prep_args(char *stack, extended_cif const* const ecif)
 
 
 #if 1 /* !defined(FFI_NO_STRUCTS) */
-debug(1," HELLO ");
+    /* debug(1," HELLO "); */
     /* When callee returns an aggregate (VE_REFERENCE), the caller:
        - povides return memory on its stack and set %s0 to caller-176%(sp).
        and callee also set %s0 to the address of the returned struct.
@@ -432,10 +432,10 @@ debug(1," HELLO ");
         //debug(3,"\n   a%u[%s]%s",(unsigned)i,ffi_type_detail(*p_arg),ffi_avalue_str(*p_arg,*p_argv));
 
         Argclass cls = argclass(*p_arg); /* VE_REGISTER/REFERENCE/BOTH */
-#if !defined(FFI_NO_STRUCTS)
+#if 1 /* !defined(FFI_NO_STRUCTS) */
         if( type == FFI_TYPE_STRUCT ){
             FFI_ASSERT( type == FFI_TYPE_STRUCT ); /* VE has no special small-struct handling */
-            FFI_ASSERT( cls == VE_REFERENCE )
+            FFI_ASSERT( cls == VE_REFERENCE );
             FFI_ASSERT("struct args TBD" == NULL);
             continue;
         }
@@ -678,11 +678,6 @@ ffi_status ffi_prep_cif_machdep(ffi_cif *cif)
                     break;
             }
         }
-#if 0 && !defined(FFI_NO_STRUCTS)
-        case FFI_TYPE_STRUCT: /* argclass is REFERENCE */
-        FFI_ASSERT(0);
-        break;
-#endif
     }
 
     if( greg < NGREGARG ){
@@ -700,7 +695,7 @@ ffi_status ffi_prep_cif_machdep(ffi_cif *cif)
     /* Set the return type flag XXX CHECKME */
     switch (cif->rtype->type)
     {
-#if !defined(FFI_NO_STRUCTS)
+#if 1 /* !defined(FFI_NO_STRUCTS) */
         case FFI_TYPE_STRUCT: /* there is no special handling for small-structs*/
             /* cif->bytes += cif->type->size; */
             /* are structs on stack, or really on "temporary space"? */
