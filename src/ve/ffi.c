@@ -1,7 +1,7 @@
 /* -----------------------------------------------------------------------
    ffi.c - Copyright (c) 2003, 2004, 2006, 2007, 2012 Kaz Kojima
            Copyright (c) 2008 Anthony Green
-   
+
    NEC VE Aurora (c) 2018 NEC Labs America, LLC
    VE ABI support
 
@@ -47,7 +47,7 @@
 //#define NFREGARG 12
 
 void print_s0(UINT64 s0){
-    debug(2, " print_s0: %lu = %ld = 0x%lx ", (long unsigned)s0, 
+    debug(2, " print_s0: %lu = %ld = 0x%lx ", (long unsigned)s0,
             (long int)s0, (long unsigned)s0);
 }
 void print_s0_example(UINT64 s0){
@@ -254,8 +254,8 @@ static char const* ffi_cif_str( ffi_cif const* cif){
         for( greg=0; greg<NGREGARG; ++greg ){
             SINT8 reginfo = flg&0xff;
             flg >>= 8;
-            if( reginfo == 0xff ) DPRINT("R");
-            else if( reginfo == 0x80 ) DPRINT("x");
+            if( reginfo == (SINT8)0xff ) DPRINT("x");
+            else if( reginfo == (SINT8)0x80 ) DPRINT("R");
             else if( reginfo < 0 ) DPRINT("?");
             else DPRINT("%u",(unsigned)(UINT8)reginfo); /* reginfo>0 holds an arg# in [0,127] */
         }
@@ -277,7 +277,7 @@ R S A..|
 e a r  | 168(%fp)   %s33Callee-saved register
 g v e  |  ...        ...
 i e a  | 48(%fp)    %s18 Callee-saved register
-s      | 40(%fp)    %s17 Linkage Area Register 
+s      | 40(%fp)    %s17 Linkage Area Register
 t      | 32(%fp)    %plt Procedure Linkage Table Register
 e      | 24(%fp)    %got Global Offset Table Register
 r......| 16(%fp)    %tp Thread Pointer Register
@@ -334,7 +334,7 @@ NEC VE ABI 0.10 does not support small-struct optimizations. */
 
 /* ffi_prep_args is called by the assembly routine once stack space
    has been allocated for the function's arguments.
-   
+
    \p stack points to parameter area in caller's stack frame.
 
    We organize the stack as follows, for simplicity:
@@ -394,21 +394,28 @@ void ffi_prep_args(char *stack, extended_cif const* const ecif)
 }while(0)
 
 
-#if !defined(FFI_NO_STRUCTS)
+#if 1 /* !defined(FFI_NO_STRUCTS) */
+debug(1," HELLO ");
     /* When callee returns an aggregate (VE_REFERENCE), the caller:
        - povides return memory on its stack and set %s0 to caller-176%(sp).
        and callee also set %s0 to the address of the returned struct.
 
        In effect, a returned struct becomes a hidden "first argument".
-       
+
        Now does libffi stick this "hidden arg" into arg_types?
        If not, how is ffi_cif.rtype used? */
     if (ecif->cif->rtype->type == FFI_TYPE_STRUCT)
     {
         FFI_ASSERT( regn == 0 && reginfo < 0 );
         FFI_ASSERT( ecif->rvalue != NULL );
-        *(UINT64*)stkreg = (UINT64)ecif->rvalue;    /* %s0 points at return-struct mem (alloca) */
+        *(UINT64*)stkreg = (UINT64)ecif->rvalue;    /* %s0 points at return-struct mem (user-supplied, or from alloca in machdep) */
         STKREG_NEXT;
+        /* in principle the ptr could be register-only, as docs hint, but actually... */
+        *(UINT64*)stkarg = (UINT64)ecif->rvalue;
+        stkarg += 8;
+        debug(1,"struct[s%lua%u]->stkreg+stkarg as ptr %p\n",
+                (long unsigned)ecif->cif->rtype->size, ecif->cif->rtype->alignment,
+                ecif->rvalue);
     }
 #endif
 
@@ -602,7 +609,7 @@ ffi_status ffi_prep_cif_machdep(ffi_cif *cif)
                         cif->bytes += sizeof (UINT64) - size;
                     n = (size + sizeof (UINT64) - 1) / sizeof (UINT64);
                     if (greg >= NGREGARG){
-                        debug(3," %s:%lx:%u","REF",flags2,(unsigned)greg);
+                        debug(3," %s:%lx:%u","REF>s7",flags2,(unsigned)greg);
                         continue;
                     }else if (greg < NGREGARG){ /* structs use 1 reg, as a pointer */
                         flags2 += (UINT64)i<<(greg++*8); /* this greg holds arg 'i' (ptr-to-value) */
@@ -695,9 +702,28 @@ ffi_status ffi_prep_cif_machdep(ffi_cif *cif)
     {
 #if !defined(FFI_NO_STRUCTS)
         case FFI_TYPE_STRUCT: /* there is no special handling for small-structs*/
-            /*cif->bytes += cif->type->size;*/
+            /* cif->bytes += cif->type->size; */
             /* are structs on stack, or really on "temporary space"? */
             /* I'll try alloca for the space, and the ptr-->%s0 */
+#if 0
+   9:/usr/uhome/aurora/4gi/nlabhpg/kruus/vt/src/asm-examples/Size1_fn_void.c ****       Size1 s = ext_Size1_fn_void();
+          .loc    1 9 0
+          adds.l  %s63,%fp,(60)1        # %s63 = %fp - 16 = -16(,%fp)
+          st      %s63,176(0,%sp)       # 1st "hidden" arg points to -16(,%fp)
+          st      %s0,-24(,%fp)   # spill (our own hidden Size1* destination arg)
+          or      %s0,0,%s63            # and hidden ptr arg occupies %s0
+          lea     %s12,ext_Size1_fn_void@PLT_LO(-24)
+          and     %s12,%s12,(32)0
+          sic     %lr
+          lea.sl  %s12,ext_Size1_fn_void@PLT_HI(%s12,%lr)
+          bsic    %lr,(,%s12)     # ext_Size1_fn_void
+          ld1b.sx %s63,-16(0,%fp) # Size1_fn_void.__unnamed.0.c0
+  # line 10
+  10:/usr/uhome/aurora/4gi/nlabhpg/kruus/vt/src/asm-examples/Size1_fn_void.c ****       return s;
+          .loc    1 10 0
+          ld      %s62,-24(,%fp)  # restore (hidden Size1* dest arg)
+          st1b    %s63,0(0,%s62)  # memcpy 1b struct that we got into our destination arg
+#endif
 #endif
         case FFI_TYPE_VOID:
         case FFI_TYPE_FLOAT:
@@ -724,24 +750,24 @@ ffi_status ffi_prep_cif_machdep(ffi_cif *cif)
 
 /*@-declundef@*/
 /*@-exportheader@*/
-extern void ffi_call_SYSV(void (*)(char *, extended_cif *), 
-			  /*@out@*/ extended_cif *, 
+extern void ffi_call_SYSV(void (*)(char *, extended_cif *),
+			  /*@out@*/ extended_cif *,
 			  unsigned, unsigned,
 #if defined(FFI_EXTRA_CIF_FIELDS)
               long unsigned, /*flags2*/
 #endif /*FFI_EXTRA_CIF_FIELDS*/
-			  /*@out@*/ unsigned *, 
+			  /*@out@*/ unsigned *,
 			  void (*fn)(void));
 /*@=declundef@*/
 /*@=exportheader@*/
 
-void ffi_call_SYSV_example(void (*prep_args)(char *, extended_cif *), 
-			  /*@out@*/ extended_cif *ecif, 
+void ffi_call_SYSV_example(void (*prep_args)(char *, extended_cif *),
+			  /*@out@*/ extended_cif *ecif,
 			  unsigned bytes, unsigned flags,
 #if defined(FFI_EXTRA_CIF_FIELDS)
               long unsigned flags2,
 #endif /*FFI_EXTRA_CIF_FIELDS*/
-			  /*@out@*/ unsigned *rvalue, 
+			  /*@out@*/ unsigned *rvalue,
 			  void (*fn)(void))
 {
     debug(2,"ve: ffi_call_SYSV_example ('C' stub)\n");
@@ -750,9 +776,9 @@ void ffi_call_SYSV_example(void (*prep_args)(char *, extended_cif *),
     /* asm copy mem reg area into registers */
     /* invoke fn in current stack frame ? (This is why we need assembler) */
 }
-void ffi_call_example(/*@dependent@*/ ffi_cif *cif, 
-	      void (*fn)(void), 
-	      /*@out@*/ void *rvalue, 
+void ffi_call_example(/*@dependent@*/ ffi_cif *cif,
+	      void (*fn)(void),
+	      /*@out@*/ void *rvalue,
 	      /*@dependent@*/ void **avalue)
 {
     extended_cif ecif;
@@ -776,9 +802,9 @@ void ffi_call_example(/*@dependent@*/ ffi_cif *cif,
 }
 
 
-void ffi_call(/*@dependent@*/ ffi_cif *cif, 
-	      void (*fn)(void), 
-	      /*@out@*/ void *rvalue, 
+void ffi_call(/*@dependent@*/ ffi_cif *cif,
+	      void (*fn)(void),
+	      /*@out@*/ void *rvalue,
 	      /*@dependent@*/ void **avalue)
 {
 #define FFI_USE_ASSEMBLER 1
@@ -803,8 +829,11 @@ void ffi_call(/*@dependent@*/ ffi_cif *cif,
     /* VE: this adress could be muxed into the arg passing area ? */
     else if (rvalue == NULL
             && (cif->rtype->type == FFI_TYPE_STRUCT)
-            && cif->rtype->size > 8)
+            && cif->rtype->size > 8){
         ecif.rvalue = alloca(cif->rtype->size);
+        debug(2,"struct! alloca(s%lua%u)-->ecif.rvalue=%p\n", (long unsigned)cif->rtype->size,
+                (unsigned)cif->rtype->alignment, ecif.rvalue);
+    }
 #endif
     else{
         ecif.rvalue = rvalue; /* pointer to a chunk of memory that will hold the result
@@ -812,7 +841,7 @@ void ffi_call(/*@dependent@*/ ffi_cif *cif,
                                  Caller must ensure correct alignment. */
     }
 
-    switch (cif->abi) 
+    switch (cif->abi)
     {
         case FFI_SYSV:
 #if FFI_USE_ASSEMBLER /* try out the sysv.S assembler code */
@@ -899,16 +928,16 @@ ffi_prep_closure_loc (ffi_closure *closure,
   return FFI_OK;
 }
 
-/* Basically the trampoline invokes ffi_closure_SYSV, and on 
+/* Basically the trampoline invokes ffi_closure_SYSV, and on
  * entry, r3 holds the address of the closure.
  * After storing the registers that could possibly contain
  * parameters to be passed into the stack frame and setting
- * up space for a return value, ffi_closure_SYSV invokes the 
+ * up space for a return value, ffi_closure_SYSV invokes the
  * following helper function to do most of the work.
  */
 
 int
-ffi_closure_helper_SYSV (ffi_closure *closure, UINT64 *rvalue, 
+ffi_closure_helper_SYSV (ffi_closure *closure, UINT64 *rvalue,
 			 UINT64 *pgr, UINT64 *pfr, UINT64 *pst)
 {
   void **avalue;
