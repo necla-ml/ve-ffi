@@ -81,6 +81,31 @@
 	or	%s6,%s24,(0)1; \
 	or	%s7,%s25,(0)1
 
+/* TXT_ADDRESS( REG, LABEL )
+	Purpose:	load .text symbol address into a registerxi
+	Clobbers:	%s12, %lr, REG
+*/
+#ifdef PIC
+#define TXT_ADDRESS( REG, LABEL ) \
+	lea	%s12, LABEL@PLT_LO(-24); \
+	and	%s12,%s12,(32)0; \
+	sic	%lr; \
+	lea.sl	%s12,LABEL@PLT_HI(%s12,%lr); \
+	or	REG,%s12,(0)1
+#else
+#define TXT_ADDRESS( REG, LABEL ) \
+	lea	%s12, LABEL@LO; \
+	and	%s12,%s12,(32)0; \
+	lea.sl	%s12,LABEL@HI(,%s12); \
+	or	REG,%s12,(0)1
+#endif
+#define DEFINE_STRING( LABEL,STRING ) \
+.section .rodata; \
+	.balign 8; \
+LABEL:	.asciz STRING; \
+	.balign 8; \
+	.text
+
 	.text
 #if 0
 ####### caller's stack frame
@@ -109,6 +134,44 @@
 #  functions returning void
 #endif
 ;#ENTRY(ffi_call_SYSV)
+#if 0
+.section .comment
+.balign 16
+msg_hello:
+	.ident "hello";
+.text
+
+.section .rodata
+.balign 16
+msg_asciz:
+	.asciz "hello asciz"
+.text
+
+.section .rodata
+.balign 16
+msg_ascii:
+	.asciz "hello ascii\0"
+.text
+
+.balign 16
+pmsg_asciz:
+	.long	msg_asciz
+	.long	msg_ascii
+#endif
+/* it is easier to just define local strings in .text, even if frowned upon */
+.text
+.balign 8
+txt_asciz1:
+	.asciz "txt asciz1"
+.balign 8
+txt_asciz2:
+	.asciz "txt asciz2"
+.balign 8
+str_s0: .asciz "s0"
+.balign 8
+str_s18_stkreg: .asciz "s18=stkreg"
+
+
 .balign 16
 .globl ffi_call_SYSV
 ffi_call_SYSV:
@@ -154,7 +217,7 @@ sysv_save:
 	or	%s22,%s4,(0)1	# flags2
 	or	%s23,%s5,(0)1	# rvalue
 	or	%s24,%s6,(0)1	# fn
-#if 1 // DEBUG
+#if 0 // DEBUG
 	;# print current %s0 register: %s27 = addr of print_s0 function
 #ifdef PIC
 	lea	%s12, print_s0@PLT_LO(-24)
@@ -167,6 +230,12 @@ sysv_save:
 	lea.sl	%s12,print_s0@HI(,%s12)
 #endif
 	or	%s27,%s12,(0)1	# save addr of "print_s0" fn
+#endif
+#if 1 // DEBUG v.2
+	TXT_ADDRESS( %s27, print_s0 )
+	TXT_ADDRESS( %s28, print_msg_u64 )
+	TXT_ADDRESS( %s29, print_msg_float )
+	TXT_ADDRESS( %s30, print_msg_double )
 #endif
 	
 	#.globl neg_needed_stack_size
@@ -240,40 +309,56 @@ sysv_invoke:
 	         and blind-copy into s0..s7. */
 	lea	%s0,176(,%sp)	#	%s0 = char *stack, 1st in Parameter Area for callee
 	adds.l	%s1,%s20,(58)1	#	cif->bytes - 64 ??
-	adds.l	%s18,%s0,%s1	# %s18 : char* stkreg = stack + cif->bytes - 64
-#if 1 // debug
-	or	%s0,0,%s18
-	bsic	%lr,(,%s27)	# print_s0( stkreg )
+#if 0 // NO debug
+	adds.l	%s63,%s0,%s1	# %s33 : char* stkreg = stack + cif->bytes - 64
+#else // debug... v.2
+	/* Note: must use s18..33 because bsic (debug) clobbers s63 tmp regs! */
+	adds.l	%s33,%s0,%s1	# %s33 : char* stkreg = stack + cif->bytes - 64
+	or	%s1,0,%s33
+	DEFINE_STRING( str_stkreg, "s33:stkreg" )
+	TXT_ADDRESS( %s0, str_stkreg )
+	bsic	%lr,(,%s28)	# print_msg_u64
+	or	%s63,0,%s33
 #endif
-	ld	%s0,0*8(,%s18)	# mirror stkreg --> %s0..7
-	ld	%s1,1*8(,%s18)
-	ld	%s2,2*8(,%s18)
-	ld	%s3,3*8(,%s18)
-	ld	%s4,4*8(,%s18)
-	ld	%s5,5*8(,%s18)
-	ld	%s6,6*8(,%s18)
-	ld	%s7,7*8(,%s18)
-sysv_inv2:
+	ld	%s0,0*8(,%s63)	# mirror stkreg --> %s0..7
+	ld	%s1,1*8(,%s63)
+	ld	%s2,2*8(,%s63)
+	ld	%s3,3*8(,%s63)
+	ld	%s4,4*8(,%s63)
+	ld	%s5,5*8(,%s63)
+	ld	%s6,6*8(,%s63)
+	ld	%s7,7*8(,%s63)
+sysv_inv2:				/* CALL "fn" */
 	
 	/* point stack at non-register arg area */
 	;#lea	%sp,...
 	/* call fn (was in %s6, now in %s24) */
 	or	%s12,%s24,(0)1
         bsic	%lr,(,%s12)	# retval (if rvalue!=NULL) is in %s0 (I think)
-	;#or	%sp,%s26,(0)1	# restore our stack frame (?)
-	st	%s0,-1*8(,%fp)	# spill retval
+	st	%s0,-4*8(,%fp)	# spill retval [which couldl be up to 4 registers long]
+	st	%s1,-3*8(,%fp)
+	st	%s2,-2*8(,%fp)
+	st	%s3,-1*8(,%fp)
 
-#if 1 // DEBUG
 sysv_dbg:
+#if 0 // DEBUG
 	;#SAVE_S0_TO_S7;		# spill into s18..25
 	bsic	%lr,(,%s27)	# print_s0
 	;# print rvalue (ptr that will get return value)
 	or	%s0,%s23,(0)1
 	bsic	%lr,(,%s27)
 	;#RESTORE_S0_TO_S7;	# resture from s18..25
+#elif 1 // debug v.2
+	or	%s1,0,%s0
+	DEFINE_STRING( str_retval, "%s0=retval" )
+	TXT_ADDRESS( %s0, str_retval )
+	bsic	%lr,(,%s28)	# print_msg_u64
+	or	%s1,0,%s23
+	DEFINE_STRING( str_ptr_rvalue, "%s23:rvalue@" )
+	TXT_ADDRESS( %s0, str_ptr_rvalue )
+	bsic	%lr,(,%s28)	# print_msg_u64
 #endif // DEBUG
 
-	ld	%s0,-1*8(,%fp)	# retrieve retval
 #endif
 	
 #if FUNCTIONALITY >= 3
@@ -281,16 +366,96 @@ sysv_retval:
 	/* handle return value ............................. */
 	/* or	%s0,0,return_value */
 	;# (*rvalue) = %s0
-	breq.l.nt	%s23,0,.L_BoE	# rvalue=0? skip rvalue
-	ld		%s0,-1*8(,%fp)	# retrieve retval
-	st		%s0,0(,%s23)	# (*rvalue) = %s0  (ok for 8-byte return type)
-#if 1 // DEBUG
+#if 1 // obtain ecif->cif->rtype->type. NO. This is in flags (%s21)
+	/* I think this would do it:
+		or	%s63,0,%s19	# ecif (ptr)
+		ld	%s62,0(0,%s63)	# ecif->cif
+		ld	%s61,16(0,%s62)	# ecif->cif->rtype
+		ld2b.zx	%s60,10(0,%s61)	# ecif->cif->type.type
+	*/
+	or	%s1,0,%s21	# flags ( == ecif->cif->rtype->type
+	DEFINE_STRING( str_rtype, "rtype" )
+	TXT_ADDRESS( %s0, str_rtype )
+	bsic	%lr,(,%s28)	# print_msg_u64
+#endif
+	breq.l.nt	%s23,0,.L_BoE	# rvalue == NULL? skip rvalue
+	breq.w.t	FFI_TYPE_VOID,%s21, sysv_ret2
+.L1.notvoid:
+	;#ld	%s0,-4*8(,%fp)	# retrieve retval
+	;#ld	%s1,-3*8(,%fp)
+	;#ld	%s2,-2*8(,%fp)
+	;#ld	%s3,-1*8(,%fp)
+#if 1
+	brne.w.t	FFI_TYPE_FLOAT,%s21, .L1.notfloat
+sysv_rfloat:
+	ld	%s0,-4*8(,%fp)	# retrieve retval
+	stu	%s0,0(,%s23)	# register-float ---> 4-byte float memory
+	/* debug... */
+	or	%s1,0,%s0	# flags ( == ecif->cif->rtype->type
+	DEFINE_STRING( str_rfloat, "rfloat" )
+	TXT_ADDRESS( %s0, str_rfloat )
+	bsic	%lr,(,%s29)	# print_msg_float
+	ldu	%s1,0(,%s23)	# flags ( == ecif->cif->rtype->type
+	DEFINE_STRING( str_rdouble, "rdouble" )
+	TXT_ADDRESS( %s0, str_rdouble )
+	bsic	%lr,(,%s30)	# print_msg_float
+	br.w	sysv_ret2
+.L1.notfloat:
+#endif
+#if 0
+	brne.w.t	FFI_TYPE_LONGDOUBLE,%s21,.L1.notldouble
+sysv_rldouble:
+	ld	%s0,-4*8(,%fp)	# retrieve retval
+	ld	%s1,-3*8(,%fp)
+	st	%s0,0(,%s23)
+	st	%s1,8(,%s23)
+	br.w	sysv_ret2
+.L1.notldouble:
+#endif
+#if 0
+	brne.w.t	FFI_TYPE_COMPLEX,%s21,.L1.notcomplex
+sysv_rcomplex: # double complex ... ?
+	ld	%s0,-4*8(,%fp)	# retrieve retval
+	ld	%s1,-3*8(,%fp)
+	st	%s0,0(,%s23)
+	st	%s1,8(,%s23)
+	br.w	sysv_ret2
+.L1.notcomplex:
+#endif
+#if 0
+	brne.w.t	FFI_TYPE_STRUCT,%s21,.L1.notstruct
+	ld	%s0,-4*8(,%fp)	# retrieve retval = addr with content
+	/* size = ? */
+	/* memcpy */
+	br.w	sysv_ret2
+.L1.notstruct:
+#endif
+	/* ###################### */
+	/* <= 8-byte scalar types [except FLOAT] are OK with just: */
+	ld	%s0,-4*8(,%fp)	# retrieve retval (1 reg)
+	;#ld	%s1,-3*8(,%fp)
+	;#ld	%s2,-2*8(,%fp)
+	;#ld	%s3,-1*8(,%fp)
+	st	%s0,0(,%s23)	# (*rvalue) = %s0  (ok for 8-byte return type)
+	/* ###################### */
+
+#if 0 // DEBUG
 	ld	%s0,0(,%s23)	# print *rvalue (as uint64)
 	bsic	%lr,(,%s27)	# print_s0
+#elif 1 // debug v.2
+	ld	%s1,0(,%s23)	# print *rvalue (as uint64)
+	DEFINE_STRING( str_rvalue, "*rvalue" )
+	TXT_ADDRESS( %s0, str_rvalue )
+	bsic	%lr,(,%s28)	# print_msg_u64
 #endif
+
+
 sysv_ret2:
-	ld	%s0,-1*8(,%fp)	# retrieve retval
-#endif
+	ld	%s0,-4*8(,%fp)	# retrieve retval [change order if incorrect for multibyte]
+	ld	%s1,-3*8(,%fp)
+	ld	%s2,-2*8(,%fp)
+	ld	%s3,-1*8(,%fp)
+#endif /* FUNCTIONALITY >= 3 */
 
 sysv_epilogue:
 .L_BoE: ;# begin epilogue

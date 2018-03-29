@@ -47,10 +47,41 @@
 //#define NFREGARG 12
 
 void print_s0(UINT64 s0){
-    debug(2, " print_s0: %lu = %ld = 0x%lx ", (long unsigned)s0, (long int)s0, (long unsigned)s0);
+    debug(2, " print_s0: %lu = %ld = 0x%lx ", (long unsigned)s0, 
+            (long int)s0, (long unsigned)s0);
 }
 void print_s0_example(UINT64 s0){
     print_s0(s0);
+    if( s0 != 2 ) goto done;
+    s0 = s0 + s0;
+done:
+    print_s0(s0);
+}
+void print_msg_u64(void const* const s0_msg, UINT64 const s1_u64){
+    debug(2, " %s:0x%lx,%lu,%ld,%f ", (char const*)s0_msg, (long unsigned)s1_u64,
+            (long int)s1_u64, (long unsigned)s1_u64, *(float*)(void*)&s1_u64);
+}
+void print_msg_u64_example(void const* const s0_msg, UINT64 const s1_u64){
+    print_msg_u64((char const*)s0_msg, s1_u64);
+}
+void print_msg_float(void const* const s0_msg, float const s1_f){
+    debug(2, " %s:%f ", (char const*)s0_msg, s1_f);
+}
+void print_msg_double(void const* const s0_msg, double const s1_f){
+    debug(2, " %s:%f ", (char const*)s0_msg, s1_f);
+}
+
+ffi_cif ffi_cif_example;
+const int ffi_cif_offset_rtype = (char*)&ffi_cif_example.rtype - (char*)&ffi_cif_example;
+ffi_type ffi_type_example;
+const int ffi_type_offset_type = (char*)&ffi_type_example.type - (char*)&ffi_type_example;
+void prt_ecif_cif_rtype_type( extended_cif *ecif ){
+    printf("ecif->rtype_type=%lu\n", (long unsigned)ecif->cif->rtype->type);
+    union { uint64_t u64; float f[2]; } val;
+    val.u64 = 0UL;
+    val.f[0] = 1.499f;
+    float x = val.f[0];
+    printf(" val.f[0]=%f", (double)x);
 }
 
 typedef enum ve_argclass {
@@ -125,8 +156,8 @@ static char const* ffi_avalue_str( ffi_type const* const t, void* avalue ){
         case( FFI_TYPE_SINT32     ): DPRINT("%ld",(long   signed) *(SINT32*)avalue); break;
         case( FFI_TYPE_UINT64     ): DPRINT("%lu",(long unsigned) *(UINT64*)avalue); break;
         case( FFI_TYPE_SINT64     ): DPRINT("%ld",(long   signed) *(SINT64*)avalue); break;
-        case( FFI_TYPE_STRUCT     ): DPRINT("struct@%p",avalue); break;
-        case( FFI_TYPE_POINTER    ): DPRINT("ptr@%p",avalue); break;
+        case( FFI_TYPE_STRUCT     ): DPRINT("struct@%p",*(void**)avalue); break;
+        case( FFI_TYPE_POINTER    ): DPRINT("ptr@%p",*(void**)avalue); break;
         case( FFI_TYPE_COMPLEX    ):
                                      {
                                          complex c=*(complex*)avalue;
@@ -334,6 +365,7 @@ void ffi_prep_args(char *stack, extended_cif const* const ecif)
 
     stkarg = stack;                           /* non-register args area */
     stkreg = stack + ecif->cif->bytes - 64;   /* register mirror area %s0..%s7 */
+    /* above shows that -64 as "adds" of M value (58)1 */
     debug(3,"stkreg=%p + %lu + 0x%x = %p\n",
             (void*)stack,(long unsigned)ecif->cif->bytes,
             -64, (void*)stkreg);
@@ -355,7 +387,7 @@ void ffi_prep_args(char *stack, extended_cif const* const ecif)
 }while(0)
 
 
-#if defined(FFI_NO_STRUCTS) && !FFI_NO_STRUCTS
+#if !defined(FFI_NO_STRUCTS)
     /* When callee returns an aggregate (VE_REFERENCE), the caller:
        - povides return memory on its stack and set %s0 to caller-176%(sp).
        and callee also set %s0 to the address of the returned struct.
@@ -396,7 +428,7 @@ void ffi_prep_args(char *stack, extended_cif const* const ecif)
         //debug(3,"\n   a%u[%s]%s",(unsigned)i,ffi_type_detail(*p_arg),ffi_avalue_str(*p_arg,*p_argv));
 
         Argclass cls = argclass(*p_arg); /* VE_REGISTER/REFERENCE/BOTH */
-#if defined(FFI_NO_STRUCTS) && !FFI_NO_STRUCTS
+#if !defined(FFI_NO_STRUCTS)
         if( type == FFI_TYPE_STRUCT ){
             FFI_ASSERT( type == FFI_TYPE_STRUCT ); /* VE has no special small-struct handling */
             FFI_ASSERT( cls == VE_REFERENCE )
@@ -457,7 +489,7 @@ void ffi_prep_args(char *stack, extended_cif const* const ecif)
 
                 case FFI_TYPE_FLOAT: /* zeroes in 'other' half */
                     /*val.r1   = 0UL;*/
-                    val.f[0] = *(float*)(*p_argv);
+                    val.f[1] = *(float*)(*p_argv);
                     break;
 
                 case FFI_TYPE_DOUBLE:
@@ -465,21 +497,24 @@ void ffi_prep_args(char *stack, extended_cif const* const ecif)
                     break;
 
                 case FFI_TYPE_POINTER:
-                    *(SINT64*) val.r1 = (SINT64) (*p_argv);
+                    *(SINT64*) val.r1 = (SINT64) *(void**)(*p_argv);
+                    debug(3," ptr 0x%lx ", (unsigned long)val.r1);
 
                 default:
                     FFI_ASSERT("unhandled small type in ffi_prep_args" == NULL);
             }
             if( reginfo == i ){ /* is this a register value? */
                 *(UINT64*)stkreg = val.r1;
-                debug(3," r%lu", (long unsigned)val.r1);
+                //debug(3," r%lu", (long unsigned)val.r1);
+                debug(3," r%s", ffi_avalue_str(*p_arg,(void*)&val));
                 STKREG_NEXT;
                 //if( cls == VE_REGISTER )
                 //    continue; /* ONLY in register */
             }
             /* store in arg space ... */
             *(UINT64*)stkarg = val.r1;
-            debug(3," stk%lu",(void*)stkarg, (unsigned long)val.r1);
+            //debug(3," stk%lu", (unsigned long)val.r1);
+            debug(3," stk%s", ffi_avalue_str(*p_arg,(void*)&val));
             stkarg += 8;
         }else if( type ==  FFI_TYPE_LONGDOUBLE ){
             FFI_ASSERT("prep_args FFI_TYPE_LONGDOUBLE TBD" == NULL);
@@ -635,7 +670,7 @@ ffi_status ffi_prep_cif_machdep(ffi_cif *cif)
                     break;
             }
         }
-#if 0 && defined(FFI_NO_STRUCTS) && !FFI_NO_STRUCTS
+#if 0 && !defined(FFI_NO_STRUCTS)
         case FFI_TYPE_STRUCT: /* argclass is REFERENCE */
         FFI_ASSERT(0);
         break;
@@ -657,7 +692,7 @@ ffi_status ffi_prep_cif_machdep(ffi_cif *cif)
     /* Set the return type flag XXX CHECKME */
     switch (cif->rtype->type)
     {
-#if defined(FFI_NO_STRUCTS) && !FFI_NO_STRUCTS
+#if !defined(FFI_NO_STRUCTS)
         case FFI_TYPE_STRUCT: /* there is no special handling for small-structs*/
             /*cif->bytes += cif->type->size;*/
             /* are structs on stack, or really on "temporary space"? */
@@ -780,7 +815,7 @@ void ffi_call(/*@dependent@*/ ffi_cif *cif,
     {
         case FFI_SYSV:
 #if FFI_USE_ASSEMBLER /* try out the sysv.S assembler code */
-            ffi_call_SYSV(ffi_prep_args, &ecif, cif->bytes, cif->flags,
+            ffi_call_SYSV(ffi_prep_args, (extended_cif const* const)&ecif, cif->bytes, cif->flags,
 #if defined(FFI_EXTRA_CIF_FIELDS)
                     cif->flags2,
 #endif /*FFI_EXTRA_CIF_FIELDS*/
