@@ -106,6 +106,8 @@ LABEL:	.asciz STRING; \
 	.balign 8; \
 	.text
 
+#define SYSV_DEBUG 1
+#if SYSV_DEBUG > 0
 #define PRINT_MSG_U64( NAME, LOAD_S1... ) \
 	LOAD_S1; \
 	DEFINE_STRING( sysv_str_##NAME, #NAME ); \
@@ -117,6 +119,10 @@ LABEL:	.asciz STRING; \
 	DEFINE_STRING( sysv_str_##NAME, XSTRING ); \
 	TXT_ADDRESS( %s0, sysv_str_##NAME ); \
 	bsic	%lr,(,%s28)
+#else
+#define PRINT_MSG_U64( NAME, LOAD_S1... )
+#define PRINT_MSG_U64X( NAME, XSTRING, LOAD_S1... )
+#endif
 
 
 	.text
@@ -323,12 +329,12 @@ sysv_invoke:
 	PRINT_MSG_U64(stack, lea %s0,176(,%sp));
 	lea	%s0,176(,%sp)	#	%s0 = char *stack, 1st in Parameter Area for callee
 	adds.l	%s1,%s20,(58)1	#	cif->bytes - 64 ??
-#if 0 /* no debug */
-	adds.l	%s63,%s0,%s1	# %s33 : char* stkreg = stack + cif->bytes - 64
-#else /* debug: need spill register */
+#if SYSV_DEBUG > 0 /* debug: need spill register */
 	adds.l	%s33,%s0,%s1	# %s33 : char* stkreg = stack + cif->bytes - 64
 	PRINT_MSG_U64(s33_stkreg,  or %s1,0,%s33 )
 	or	%s63,0,%s33
+#else /* no debug */
+	adds.l	%s63,%s0,%s1	# %s33 : char* stkreg = stack + cif->bytes - 64
 #endif
 	ld	%s0,0*8(,%s63)	# mirror stkreg --> %s0..7
 	ld	%s1,1*8(,%s63)
@@ -351,7 +357,7 @@ sysv_inv2:				/* CALL "fn" */
 	st	%s3,-1*8(,%fp)
 
 sysv_dbg:
-#if 1 /* debug */
+#if SYSV_DEBUG > 0
 	PRINT_MSG_U64(s0_retval,  or %s1,0,%s0)
 	PRINT_MSG_U64(s23_rvalue_ptr,  or %s1,0,%s23)
 #endif
@@ -383,7 +389,7 @@ sysv_retval:
 sysv_rfloat:
 	ld	%s0,-4*8(,%fp)	# retrieve retval
 	stu	%s0,0(,%s23)	# register-float ---> 4-byte float memory
-#if 0 /* debug */
+#if SYSV_DEBUG > 0
 	or	%s1,0,%s0	# retval-float
 	DEFINE_STRING( str_rfloat, "rfloat" )
 	TXT_ADDRESS( %s0, str_rfloat )
@@ -419,9 +425,8 @@ sysv_rcomplex: # double complex ... ?
 #if 1
 	brne.w.t	FFI_TYPE_STRUCT,%s21,.L1.notstruct
 sysv_rstruct:
-	PRINT_MSG_U64(rstruct, ld %s0,-4*8(,%fp))	# retrieve retval = addr with content
 #if 1 /* New [trick] */
-	/* Note: unlike the compiler-generated code (at -O0 or -O1 I think),
+	/* Note: unlike the compiler-generated code (at -O0 or -O1 or -O2 I think),
 		which does a double struct copy,
 
 		I pass along the "hidden arg 0" ptr directly to 'fn'
@@ -429,27 +434,47 @@ sysv_rstruct:
 		This means I do NOT need to deal with the struct-copy here
 		(I hope) ... and FFI_TYPE_STRUCT return values can be
 		handled just like any other pointer-return */
+#if SYSV_DEBUG > 0
+	PRINT_MSG_U64(rstruct, ld %s0,-4*8(,%fp))	# retrieve retval = addr with content
+	br.w	sysv_ret1
 #else
+	br.w	.L_BoE
+#endif
+#else /* original code thoughts, akin to compiler double-copy approach */
 	/* size = ? */
 	/* memcpy? for example XXX (wrong) */
+	PRINT_MSG_U64(rstruct, ld %s0,-4*8(,%fp))	# retrieve retval = addr with content
 	ld	%s0,-4*8(,%fp)	# retrieve retval = addr with content
 	ld	%s1,0(,%s0)	# retrieve first 64-bits of struct/union...
 	st	%s1,0(,%s23)	# (*rvalue) = %s0  (ok for 8-byte return type)
 	addu.l	%s1,8,%s1
+	br.w	sysv_ret1	# return 1 register (our hidden-arg1 ptr-to-struct, again)
 #endif
 	/* NB we do not need to store anything into *rvalue */
-	br.w	sysv_ret1	# return 1 register (our hidden-arg1 ptr-to-struct, again)
 .L1.notstruct:
 #endif
 #if 1
 	brne.w.t	FFI_TYPE_POINTER,%s21,.L1.notpointer
 sysv_rpointer:
+#if SYSV_DEBUG > 0
 	PRINT_MSG_U64( rpointer,  ld %s0,-4*8(,%fp))	# %s0 = void* ret
+#endif
+	ld	%s0,-4*8(,%fp)	# %s0 = void* ret
+	st	%s0,0(,%s23)	# (*rvalue) = ret
+	br.w	.L_BoE
+.L1.notpointer:
+#endif
+#if 1 /* identical to default case, separate for debug */
+	brne.w.t	FFI_TYPE_DOUBLE,%s21,.L1.notdouble
+sysv_rdouble:
 	ld	%s0,-4*8(,%fp)	# %s0 = void* ret
 	st	%s0,0(,%s23)	# (*rvalue) = ret
 	br.w	sysv_ret1
-.L1.notpointer:
+	//br.w	.L_BoE
+.L1.notdouble:
 #endif
+
+
 	/* ###################### */
 	/* <= 8-byte scalar types [except FLOAT] are OK with just: */
 	ld	%s0,-4*8(,%fp)	# retrieve retval (1 reg)
@@ -458,11 +483,11 @@ sysv_rpointer:
 	;#ld	%s3,-1*8(,%fp)
 	st	%s0,0(,%s23)	# (*rvalue) = %s0  (ok for 8-byte return type)
 	/* ###################### */
-#if 1 /* debug */
+#if SYSV_DEBUG > 0
 	PRINT_MSG_U64X( u64_rvalue, "*rvalue", ld %s1,0(,%s23))	# print *rvalue (as uint64)
-	br.w sysv_ret1
+	br.w	sysv_ret1
 #else
-	br.w .L_BoE # reg return value already in place
+	br.w	.L_BoE # reg return value already in place
 #endif
 
 sysv_ret4:

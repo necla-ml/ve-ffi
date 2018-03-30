@@ -37,7 +37,7 @@
 #include <math.h>       /* fabs */
 #include <complex.h>
 
-#define DEBUG_LEVEL   3
+#define DEBUG_LEVEL   5
 #define FIRST_ARG_BYTE  176 /* 22*8: fp, ret | %tp %got %plt %s17 16*%s18..33 */
 #define ROUND_UP(v, a)  (((size_t)(v) + (a) - 1) & ~((a) - 1))
 
@@ -159,7 +159,7 @@ static char const* ffi_avalue_str( ffi_type const* const t, void* avalue ){
         case( FFI_TYPE_UINT64     ): DPRINT("%lu",(long unsigned) *(UINT64*)avalue); break;
         case( FFI_TYPE_SINT64     ): DPRINT("%ld",(long   signed) *(SINT64*)avalue); break;
         case( FFI_TYPE_STRUCT     ): DPRINT("struct@%p",(void*)avalue); break;
-        case( FFI_TYPE_POINTER    ): DPRINT("ptr@%p",*(void**)avalue); break;
+        case( FFI_TYPE_POINTER    ): DPRINT("ptr@%p",(void*)avalue); break;
         case( FFI_TYPE_COMPLEX    ):
                                      {
                                          complex c=*(complex*)avalue;
@@ -381,13 +381,13 @@ void ffi_prep_args(char *stack, extended_cif const* const ecif)
     SINT8  reginfo = regflags&0xFF;
 #define STKREG_NEXT do { \
     if(regn < NGREGARG){ \
-        debug(2," regf:%lx,",(unsigned long)regflags); \
+        debug(4," regf:%lx,",(unsigned long)regflags); \
         stkreg += sizeof(UINT64); ++regn; \
         regflags >>= 8; reginfo = regflags&0xFF; \
-        debug(2,"->%lx regi=%x ", (unsigned long)regflags, (unsigned)reginfo); \
+        debug(4,"->%lx regi=%x ", (unsigned long)regflags, (unsigned)reginfo); \
         for( ; regn<NGREGARG && reginfo<0; ++regn, \
                 regflags>>=8, reginfo=regflags&0xFF ){ \
-            debug(2," Z regi=%x ",(unsigned)reginfo); \
+            debug(4," Z regi=%x ",(unsigned)reginfo); \
             *(UINT64*)stkreg = 0UL; \
             stkreg+=sizeof(UINT64); \
         } \
@@ -416,7 +416,7 @@ void ffi_prep_args(char *stack, extended_cif const* const ecif)
         /* in principle the ptr could be register-only, as docs hint, but actually... */
         *(UINT64*)stkarg = (UINT64)ecif->rvalue;
         stkarg += 8;
-        debug(1,"struct[s%lua%u]->stkreg+stkarg as ptr %p\n",
+        debug(2,"struct[s%lua%u]->stkreg+stkarg as ptr %p\n",
                 (long unsigned)ecif->cif->rtype->size, ecif->cif->rtype->alignment,
                 ecif->rvalue);
     }
@@ -432,7 +432,7 @@ void ffi_prep_args(char *stack, extended_cif const* const ecif)
         int align;
 
         int type = (*p_arg)->type;
-        debug(3,"\n   a%u[%s]%s ",(unsigned)i,ffi_type_detail(*p_arg),ffi_avalue_str(*p_arg,*p_argv));
+        debug(4,"\n   a%u[%s]%s ",(unsigned)i,ffi_type_detail(*p_arg),ffi_avalue_str(*p_arg,*p_argv));
 
         Argclass cls = argclass(*p_arg); /* VE_REGISTER/REFERENCE/BOTH */
         FFI_ASSERT( cls == VE_REGISTER || cls == VE_BOTH || type == FFI_TYPE_STRUCT );
@@ -501,25 +501,25 @@ void ffi_prep_args(char *stack, extended_cif const* const ecif)
                     FFI_ASSERT( cls == VE_REFERENCE );
                     /* Let's hope that the struct MEMORY content has already been set up, and all we
                        need to do is the pointer-pushing DIRECTLY TO THE avalues[] pointer */
-                    debug(3,"\nSTRUCT-arg pointer: *p_argv=%p ", *(void**)p_argv);
+                    debug(5,"\nSTRUCT-arg pointer: *p_argv=%p ", *(void**)p_argv);
                     *(SINT64*) &val.r1 = (SINT64) *(void**)p_argv;
-                    debug(3," *0x%lx = %d ", (unsigned long)val.r1, *(SINT32*)(void*)val.r1);
+                    debug(5," *0x%lx = %d ", (unsigned long)val.r1, *(SINT32*)(void*)val.r1);
                     break;
 #endif
                 case FFI_TYPE_POINTER:
-                    debug(4," *p_argv=%p ", *(void**)p_argv);
+                    debug(5," *p_argv=%p ", *(void**)p_argv);
                     *(SINT64*) &val.r1 = (SINT64) *(void**)p_argv;
-                    debug(4," ptr 0x%lx ", (unsigned long)val.r1);
+                    debug(5," ptr 0x%lx ", (unsigned long)val.r1);
                     break;
 
                 default:
                     FFI_ASSERT("unhandled small type in ffi_prep_args" == NULL);
             }
-            debug(3, " i%uri%x ",(unsigned)i,(unsigned)reginfo);
+            debug(4, " i%uri%x ",(unsigned)i,(unsigned)reginfo);
             if( reginfo == i ){ /* is this a register value? */
                 *(UINT64*)stkreg = val.r1;
                 //debug(3," r%lu", (long unsigned)val.r1);
-                debug(3," r@%p=%s=%lx", (void*)stkreg, ffi_avalue_str(*p_arg,(void*)&val),
+                debug(4," r@%p=%s=%lx", (void*)stkreg, ffi_avalue_str(*p_arg,(void*)&val),
                         (unsigned long)val.r1);
                 STKREG_NEXT;
                 //if( cls == VE_REGISTER )
@@ -529,7 +529,7 @@ void ffi_prep_args(char *stack, extended_cif const* const ecif)
             /* store in arg space ... */
             *(UINT64*)stkarg = val.r1;
             //debug(3," stk%lu", (unsigned long)val.r1);
-            debug(3," stk%s", ffi_avalue_str(*p_arg,(void*)&val));
+            debug(4," stk%s", ffi_avalue_str(*p_arg,(void*)&val));
             stkarg += 8;
             FFI_ASSERT( stkarg <= stkreg_beg );
         }else if( type ==  FFI_TYPE_LONGDOUBLE ){
@@ -550,7 +550,7 @@ void ffi_prep_args(char *stack, extended_cif const* const ecif)
     debug(1, "%s %s: stack = %p, ecif = %p, bytes = %u, rvalue=%p, avalue=%p\n      ecif->cif=%s\n",
             "END", __FUNCTION__, stack, ecif, ecif->cif->bytes, ecif->rvalue, ecif->avalue,
             ffi_cif_str(ecif->cif));
-    if(ecif->avalue != NULL) debug(1, "      %s\n", ffi_avalues_str(ecif->cif,ecif->avalue));
+    if(ecif->avalue != NULL) debug(2, "      %s\n", ffi_avalues_str(ecif->cif,ecif->avalue));
     return;
 }
 
@@ -589,7 +589,7 @@ ffi_status ffi_prep_cif_machdep(ffi_cif *cif)
         /* use %s0 as a pointer register for return value */
         flags2 = 0x80;  /* first arg 0x80 ==> return value pointer */
         greg=1;
-        debug(2," %s:%lx:%u","ret_REF",flags2,(unsigned)greg);
+        debug(3," %s:%lx:%u","ret_REF",flags2,(unsigned)greg);
     }
 
     /* ? which args get passed in register */
@@ -603,7 +603,7 @@ ffi_status ffi_prep_cif_machdep(ffi_cif *cif)
     {
         int regs = 1;
         ffi_type* ffi_type_i = (cif->arg_types)[i];
-        debug(3,"\ni=%d[%s],greg=%d ",(int)i,ffi_type_detail(ffi_type_i), (int)greg);
+        debug(4,"\ni=%d[%s],greg=%d ",(int)i,ffi_type_detail(ffi_type_i), (int)greg);
         int klas = argclass(ffi_type_i);
 
         if(greg >= NGREGARG) break;
@@ -632,7 +632,7 @@ ffi_status ffi_prep_cif_machdep(ffi_cif *cif)
                     }
                     break;
                 case FFI_TYPE_STRUCT:
-                    debug(3," Hello struct ");
+                    debug(5," Hello struct ");
                     FFI_ASSERT(klas == VE_REFERENCE);
                     if (size < sizeof (UINT64))
                         cif->bytes += sizeof (UINT64) - size;
@@ -880,6 +880,7 @@ void ffi_call(/*@dependent@*/ ffi_cif *cif,
             FFI_ASSERT(0);
             break;
     }
+    debug(3,"\n");
 
 #if 0
     if (rvalue

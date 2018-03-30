@@ -247,6 +247,14 @@ double d_d16 (double a, double b, double c, double d, double e, double f,
 }
 
 /* pointer tests */
+double d_ifpsp (int a, float* b, Int* c)
+{
+  double ret = a + *b + c->x;
+  fprintf(out,"double f(int,float*,Int*):(%d,0x%p[%f],0x%p[%d])",
+		  a, b,*b, c,c->x);
+  fflush(out);
+  return ret;
+}
 void* vp_vpdpcpsp (void* a, double* b, char* c, Int* d)
 {
   void* ret = (char*)b + 1;

@@ -432,8 +432,26 @@ void
   pointer_tests (void)
 {
   void* vpr;
+  double dr;
 
 #if (!defined(DGTEST)) || DGTEST == 19
+  /* new : I've coded libffi to work as follows, to simplify the impl */
+  dr= d_ifpsp(i1,&f5,&I4);
+  FPRINTF(out,"->%f\n",dr);
+  fflush(out);
+  dr = 0; clear_traces();
+  {
+    ffi_type* argtypes[] = { &ffi_type_sint, &ffi_type_pointer, &ffi_type_pointer };
+    ffi_cif cif;
+    FFI_PREP_CIF(cif,argtypes,ffi_type_double);
+    {
+      /*const*/ void* args[] = { &i1, (void*)&f5, (void*)&I4 };
+      FFI_CALL(cif,d_ifpsp,args,&dr);
+    }
+  }
+  FPRINTF(out,"->%f\n",dr);
+  fflush(out);
+  /* original test has additional level of indirection (unwieldly for impl) */
   vpr = vp_vpdpcpsp(&uc1,&d2,str3,&I4);
   FPRINTF(out,"->0x%p\n",vpr);
   fflush(out);
@@ -1721,7 +1739,7 @@ int
   structure_tests();
   gpargs_boundary_tests();
 
-  printf("test-call: normal exit");
+  printf("test-call: normal exit\n");
   fflush(stdout);  
   exit(0);
 }
