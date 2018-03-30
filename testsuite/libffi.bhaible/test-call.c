@@ -435,7 +435,14 @@ void
   double dr;
 
 #if (!defined(DGTEST)) || DGTEST == 19
+#if 0
   /* new : I've coded libffi to work as follows, to simplify the impl */
+  /* THIS DOES NOT FOLLOW THE LIBFFI CONVENTIONS ELSEWHERE IN TESTSUITE */
+  /* If this works [instead of the original test]
+   * then the impl is missing a layer of indirection while handling pointer args.
+   *
+   * [Personally, putting pointers directly into args[] seems more natural,
+   *  and also simplifies the implementation] */
   dr= d_ifpsp(i1,&f5,&I4);
   FPRINTF(out,"->%f\n",dr);
   fflush(out);
@@ -451,6 +458,23 @@ void
   }
   FPRINTF(out,"->%f\n",dr);
   fflush(out);
+#else
+  dr= d_ifpsp(i1,&f5,&I4);
+  FPRINTF(out,"->%f\n",dr);
+  fflush(out);
+  dr = 0; clear_traces();
+  {
+    ffi_type* argtypes[] = { &ffi_type_sint, &ffi_type_pointer, &ffi_type_pointer };
+    ffi_cif cif;
+    FFI_PREP_CIF(cif,argtypes,ffi_type_double);
+    {
+      /*const*/ void* args[] = { &i1, (void*)&f5, (void*)&I4 };
+      FFI_CALL(cif,d_ifpsp,args,&dr);
+    }
+  }
+  FPRINTF(out,"->%f\n",dr);
+  fflush(out);
+#endif
   /* original test has additional level of indirection (unwieldly for impl) */
   vpr = vp_vpdpcpsp(&uc1,&d2,str3,&I4);
   FPRINTF(out,"->0x%p\n",vpr);
