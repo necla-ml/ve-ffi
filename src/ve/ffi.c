@@ -152,7 +152,7 @@ static char const* ffi_avalue_str( ffi_type const* const t, void* avalue ){
         case( FFI_TYPE_INT        ): DPRINT("%lu",*(int*)avalue); break;
         case( FFI_TYPE_FLOAT      ): DPRINT("%f",*(float*)avalue); break;
         case( FFI_TYPE_DOUBLE     ): DPRINT("%f",*(double*)avalue); break;
-        case( FFI_TYPE_LONGDOUBLE ): DPRINT("%lf",*(long double*)avalue); break;
+        case( FFI_TYPE_LONGDOUBLE ): DPRINT("%f",(double)*(long double*)avalue); break; /* Hmm. %Lf did not work properly */
         case( FFI_TYPE_UINT8      ): DPRINT("%lu",(long unsigned) *(UINT8*)avalue); break;
         case( FFI_TYPE_SINT8      ): DPRINT("%ld",(long   signed) *(SINT8*)avalue); break;
         case( FFI_TYPE_UINT16     ): DPRINT("%lu",(long unsigned) *(UINT16*)avalue); break;
@@ -353,7 +353,7 @@ NEC VE ABI 0.10 does not support small-struct optimizations. */
    as prepared by ffi_prep_cif_machdep(ffi_cif *cif)
 */
 
-void ffi_prep_args(char *stack, extended_cif const* const ecif)
+void ffi_prep_args(char *stack, extended_cif* ecif)
 {
     register unsigned int i;
     register unsigned int avn;
@@ -447,13 +447,15 @@ void ffi_prep_args(char *stack, extended_cif const* const ecif)
         z = (*p_arg)->size;
         align = (*p_arg)->alignment;
 
-        if (z <= sizeof (UINT64) || type == FFI_TYPE_STRUCT)
+        /*if (z <= sizeof (UINT64) || type == FFI_TYPE_STRUCT)*/
+        if(1) /* all cases... */
         {
             /* these types are passed as single-register (if possible) */
             union uarg_t {
                 UINT64 r1;
                 float f[2];
                 double d;
+                long double ld;
             } val;
             val.r1 = 0UL;
 
@@ -522,31 +524,50 @@ void ffi_prep_args(char *stack, extended_cif const* const ecif)
 #endif
                     debug(5," ptr 0x%lx ", (unsigned long)val.r1);
                     break;
+                case FFI_TYPE_LONGDOUBLE:
+                    *(long double*)&val.ld = *(long double*)(*p_argv);
+                    break;
+                case FFI_TYPE_COMPLEX:
+                    FFI_ASSERT("prep_args FFI_TYPE_COMPLEX TBD" == NULL);
+                    break;
 
                 default:
                     FFI_ASSERT("unhandled small type in ffi_prep_args" == NULL);
             }
             debug(4, " i%uri%x ",(unsigned)i,(unsigned)reginfo);
-            if( reginfo == i ){ /* is this a register value? */
-                *(UINT64*)stkreg = val.r1;
-                //debug(3," r%lu", (long unsigned)val.r1);
-                debug(4," r@%p=%s=%lx", (void*)stkreg, ffi_avalue_str(*p_arg,(void*)&val),
-                        (unsigned long)val.r1);
-                STKREG_NEXT;
-                //if( cls == VE_REGISTER )
-                //    continue; /* ONLY in register */
-                FFI_ASSERT( stkreg <= stkreg_end );
+            if(z <= 64 || type==FFI_TYPE_STRUCT){
+                if( reginfo == i ){ /* is this a register value? */
+                    *(UINT64*)stkreg = val.r1;
+                    //debug(3," r%lu", (long unsigned)val.r1);
+                    debug(4," r@%p=%s=%lx", (void*)stkreg, ffi_avalue_str(*p_arg,(void*)&val),
+                            (unsigned long)val.r1);
+                    STKREG_NEXT;
+                    //if( cls == VE_REGISTER )
+                    //    continue; /* ONLY in register */
+                    FFI_ASSERT( stkreg <= stkreg_end );
+                }
+                /* store in arg space ... */
+                *(UINT64*)stkarg = val.r1;
+                //debug(3," stk%lu", (unsigned long)val.r1);
+                debug(4," stk%s", ffi_avalue_str(*p_arg,(void*)&val));
+                stkarg += 8;
+                FFI_ASSERT( stkarg <= stkreg_beg );
+            }else if( z>=128 ){
+                /* Multi-registers... longdouble, ?? Complex double */
+                if( type == FFI_TYPE_LONGDOUBLE || z==128/*?*/ ){
+                    if( reginfo == i ){
+                        *(long double*)stkreg = val.ld;
+                        STKREG_NEXT;
+                        FFI_ASSERT( reginfo == i );
+                        STKREG_NEXT;
+                    }
+                    /* store in arg space ... */
+                    *(long double*)stkarg = val.ld;
+                    stkarg += 2*8;
+                }else{
+                    FFI_ASSERT("Unhandled type" == NULL);
+                }
             }
-            /* store in arg space ... */
-            *(UINT64*)stkarg = val.r1;
-            //debug(3," stk%lu", (unsigned long)val.r1);
-            debug(4," stk%s", ffi_avalue_str(*p_arg,(void*)&val));
-            stkarg += 8;
-            FFI_ASSERT( stkarg <= stkreg_beg );
-        }else if( type ==  FFI_TYPE_LONGDOUBLE ){
-            FFI_ASSERT("prep_args FFI_TYPE_LONGDOUBLE TBD" == NULL);
-        }else if( type == FFI_TYPE_COMPLEX ){
-            FFI_ASSERT("prep_args FFI_TYPE_COMPLEX TBD" == NULL);
         }
 #if 0
         {
@@ -787,7 +808,7 @@ extern void ffi_call_SYSV(void (*)(char *, extended_cif *),
 /*@=declundef@*/
 /*@=exportheader@*/
 
-void ffi_call_SYSV_example(void (*prep_args)(char *, extended_cif *),
+void ffi_call_SYSV_example(void (*prep_args)(char *, extended_cif * ),
 			  /*@out@*/ extended_cif *ecif,
 			  unsigned bytes, unsigned flags,
 #if defined(FFI_EXTRA_CIF_FIELDS)
@@ -871,7 +892,7 @@ void ffi_call(/*@dependent@*/ ffi_cif *cif,
     {
         case FFI_SYSV:
 #if FFI_USE_ASSEMBLER /* try out the sysv.S assembler code */
-            ffi_call_SYSV(ffi_prep_args, (extended_cif const* const)&ecif, cif->bytes, cif->flags,
+            ffi_call_SYSV(ffi_prep_args, &ecif, cif->bytes, cif->flags,
 #if defined(FFI_EXTRA_CIF_FIELDS)
                     cif->flags2,
 #endif /*FFI_EXTRA_CIF_FIELDS*/

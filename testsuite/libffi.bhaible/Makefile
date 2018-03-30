@@ -1,4 +1,5 @@
 CLOSURE_SUPPORT?=1
+COMPLEX_SUPPORT?=1
 # for VE, check-callback can't work (needs closure API)
 
 prefix ?= ../../install
@@ -18,6 +19,11 @@ includedir = $(prefix)/include
 libdir = $(prefix)/lib
 CPPFLAGS = -I$(includedir)
 LDFLAGS = -L$(libdir) -Wl,-rpath,$(libdir)
+
+# or, for standalone, could grab HAVE_foo things from environment during compile:
+#CPPFLAGS += -I../../@target_triplet@ # for fficonfig, for optional types
+HAVE_LONG_DOUBLE?=1
+CPPFLAGS+=-DHAVE_LONG_DOUBLE=$(HAVE_LONG_DOUBLE) -DHAVE_COMPLEX=$(COMPLEX_SUPPORT)
 
 #CFLAGS += -fPIC -DPIC -g
 #LDFLAGS += -shared

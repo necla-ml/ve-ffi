@@ -428,6 +428,105 @@ void
 #endif  
   return;
 }
+#if HAVE_LONG_DOUBLE
+void
+  long_double_tests (void)
+{
+  long double ldr;
+
+#if (!defined(DGTEST)) || DGTEST == 14
+  
+  ldr = ld_ld(d1);
+  FPRINTF(out,"->%g\n",(double)ldr); /* had issues with %Lg */
+  fflush(out);
+  ldr = 0.0; clear_traces();
+  {
+    ffi_type* argtypes[] = { &ffi_type_longdouble };
+    ffi_cif cif;
+    FFI_PREP_CIF(cif,argtypes,ffi_type_longdouble);
+    {
+      /*const*/ void* args[] = { &ld1 };
+      FFI_CALL(cif,ld_ld,args,&ldr);
+    }
+  }
+  FPRINTF(out,"->%g\n",(double)ldr);
+  fflush(out);
+#endif
+
+#if (!defined(DGTEST)) || DGTEST == 15
+  ldr = ld_ld2(d1,d2);
+  FPRINTF(out,"->%g\n",(double)ldr);
+  fflush(out);
+  ldr = 0.0; clear_traces();
+  {
+    ffi_type* argtypes[] = { &ffi_type_longdouble, &ffi_type_longdouble };
+    ffi_cif cif;
+    FFI_PREP_CIF(cif,argtypes,ffi_type_longdouble);
+    {
+      /*const*/ void* args[] = { &ld1, &ld2 };
+      FFI_CALL(cif,ld_ld2,args,&ldr);
+    }
+  }
+  FPRINTF(out,"->%g\n",(double)ldr);
+  fflush(out);
+#endif
+
+#if (!defined(DGTEST)) || DGTEST == 16
+  ldr = ld_ld4(d1,d2,d3,d4);
+  FPRINTF(out,"->%g\n",(double)ldr);
+  fflush(out);
+  ldr = 0.0; clear_traces();
+  {
+    ffi_type* argtypes[] = { &ffi_type_longdouble, &ffi_type_longdouble, &ffi_type_longdouble, &ffi_type_longdouble };
+    ffi_cif cif;
+    FFI_PREP_CIF(cif,argtypes,ffi_type_longdouble);
+    {
+      /*const*/ void* args[] = { &ld1, &ld2, &ld3, &ld4 };
+      FFI_CALL(cif,ld_ld4,args,&ldr);
+    }
+  }
+  FPRINTF(out,"->%g\n",(double)ldr);
+  fflush(out);
+#endif
+
+#if (!defined(DGTEST)) || DGTEST == 17
+  ldr = ld_ld8(d1,d2,d3,d4,d5,d6,d7,d8);
+  FPRINTF(out,"->%g\n",(double)ldr);
+  fflush(out);
+  ldr = 0.0; clear_traces();
+  {
+    ffi_type* argtypes[] = { &ffi_type_longdouble, &ffi_type_longdouble, &ffi_type_longdouble, &ffi_type_longdouble, &ffi_type_longdouble, &ffi_type_longdouble, &ffi_type_longdouble, &ffi_type_longdouble };
+    ffi_cif cif;
+    FFI_PREP_CIF(cif,argtypes,ffi_type_longdouble);
+    {
+      /*const*/ void* args[] = { &ld1, &ld2, &ld3, &ld4, &ld5, &ld6, &ld7, &ld8 };
+      FFI_CALL(cif,ld_ld8,args,&ldr);
+    }
+  }
+  FPRINTF(out,"->%g\n",(double)ldr);
+  fflush(out);
+#endif
+
+#if (!defined(DGTEST)) || DGTEST == 18
+  ldr = ld_ld16(d1,d2,d3,d4,d5,d6,d7,d8,d9,d10,d11,d12,d13,d14,d15,d16);
+  FPRINTF(out,"->%g\n",(double)ldr);
+  fflush(out);
+  ldr = 0.0; clear_traces();
+  {
+    ffi_type* argtypes[] = { &ffi_type_longdouble, &ffi_type_longdouble, &ffi_type_longdouble, &ffi_type_longdouble, &ffi_type_longdouble, &ffi_type_longdouble, &ffi_type_longdouble, &ffi_type_longdouble, &ffi_type_longdouble, &ffi_type_longdouble, &ffi_type_longdouble, &ffi_type_longdouble, &ffi_type_longdouble, &ffi_type_longdouble, &ffi_type_longdouble, &ffi_type_longdouble };
+    ffi_cif cif;
+    FFI_PREP_CIF(cif,argtypes,ffi_type_longdouble);
+    {
+      /*const*/ void* args[] = { &ld1, &ld2, &ld3, &ld4, &ld5, &ld6, &ld7, &ld8, &ld9, &ld10, &ld11, &ld12, &ld13, &ld14, &ld15, &ld16 };
+      FFI_CALL(cif,ld_ld16,args,&ldr);
+    }
+  }
+  FPRINTF(out,"->%g\n",(double)ldr);
+  fflush(out);
+#endif  
+  return;
+}
+#endif /*HAVE_LONG_DOUBLE*/
 void
   pointer_tests (void)
 {
@@ -1763,6 +1862,9 @@ int
   int_tests();
   float_tests();
   double_tests();
+#if HAVE_LONG_DOUBLE
+  long_double_tests();
+#endif
   pointer_tests();
   mixed_number_tests();
   small_structure_return_tests();

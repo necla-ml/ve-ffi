@@ -1,4 +1,16 @@
-debug: SYSV_DEBUG in sysv.S and DEBUG_LEVEL in ffi.c
+
+EFFICIENCY: now that things basically work, we MIGHT try to avoid prep_args
+completely by doing a single alloca for the stack in ffi.c.  This approach,
+used by x86/ffi64.c and x86/uni64.S, should be much faster (avoid a fn call).
+  Summary:
+	- The "mystery code" 0x1b in prologue is really an alloca
+	  - verify in gdb by breaking at "br __stack_grow" disassembling
+	- do alloca just once, in 'C' code, set up the "stack" in ffi.c,
+	  and pass stack pointer to sysv.S
+	- don't need a second stack frame + overhead to call ffi_prep_args
+
+-----------------------------------------------
+debug: SYSV_DEBUG in sysv.S and DEBUG_LEVEL in ffi.c. Oh, now in ffitarget.h
 
 [XVE a1sb2_007 vt]$ (cd build/libffi/src/libffi/testsuite/libffi.bhaible/ && gdb --args test-call)
 

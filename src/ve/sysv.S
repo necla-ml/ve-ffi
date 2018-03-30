@@ -303,7 +303,7 @@ sysv_rfloat:
 	stu	%s0,0(,%s23)	# SPECIAL register-float ---> 4-byte float memory
 	br.w	.L_BoE
 .L1.notfloat:
-#if 0 /* TBD */
+#if 1 /* TBD */
 	brne.w.t	FFI_TYPE_LONGDOUBLE,%s21,.L1.notldouble
 sysv_rldouble:
 	ld	%s0,-4*8(,%fp)	# retrieve retval

@@ -75,6 +75,10 @@ float f1=0.1, f2=0.2, f3=0.3, f4=0.4, f5=0.5, f6=0.6, f7=0.7, f8=0.8, f9=0.9,
       f18=1.9, f19=2.1, f20=2.2, f21=2.3, f22=2.4, f23=2.5, f24=2.6;
 double d1=0.1, d2=0.2, d3=0.3, d4=0.4, d5=0.5, d6=0.6, d7=0.7, d8=0.8, d9=0.9,
        d10=1.1, d11=1.2, d12=1.3, d13=1.4, d14=1.5, d15=1.6, d16=1.7, d17=1.8;
+#if defined HAVE_LONG_DOUBLE
+long double ld1=0.1, ld2=0.2, ld3=0.3, ld4=0.4, ld5=0.5, ld6=0.6, ld7=0.7, ld8=0.8, ld9=0.9,
+       ld10=1.1, ld11=1.2, ld12=1.3, ld13=1.4, ld14=1.5, ld15=1.6, ld16=1.7, ld17=1.8;
+#endif
 
 uchar uc1='a', uc2=127, uc3=128, uc4=255, uc5=(uchar)-1;
 ushort us1=1, us2=2, us3=3, us4=4, us5=5, us6=6, us7=7, us8=8, us9=9;
@@ -246,11 +250,53 @@ double d_d16 (double a, double b, double c, double d, double e, double f,
   return r;
 }
 
+#if HAVE_LONG_DOUBLE
+/* long double tests */
+long double ld_ld (long double a)
+{
+  long double r=a+1.0;
+  fprintf(out,"long double f(long double):(%g)",(double)a);
+  fflush(out);
+  return r;
+}
+long double ld_ld2 (long double a, long double b)
+{
+  long double r=a+b;
+  fprintf(out,"long double f(2*long double):(%g,%g)",(double)a,(double)b);
+  fflush(out);
+  return r;
+}
+long double ld_ld4 (long double a, long double b, long double c, long double d)
+{
+  long double r=a+b+c+d;
+  fprintf(out,"long double f(4*long double):(%g,%g,%g,%g)",(double)a,(double)b,(double)c,(double)d);
+  fflush(out);
+  return r;
+}
+long double ld_ld8 (long double a, long double b, long double c, long double d, long double e, long double f,
+             long double g, long double h)
+{
+  long double r=a+b+c+d+e+f+g+h;
+  fprintf(out,"long double f(8*long double):(%g,%g,%g,%g,%g,%g,%g,%g)",(double)a,(double)b,(double)c,(double)d,(double)e,(double)f,(double)g,(double)h);
+  fflush(out);
+  return r;
+}
+long double ld_ld16 (long double a, long double b, long double c, long double d, long double e, long double f,
+              long double g, long double h, long double i, long double j, long double k, long double l,
+              long double m, long double n, long double o, long double p)
+{
+  long double r=a+b+c+d+e+f+g+h+i+j+k+l+m+n+o+p;
+  fprintf(out,"long double f(16*long double):(%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g)",(double)a,(double)b,(double)c,(double)d,(double)e,(double)f,(double)g,(double)h,(double)i,(double)j,(double)k,(double)l,(double)m,(double)n,(double)o,(double)p);
+  fflush(out);
+  return r;
+}
+#endif
+
 /* pointer tests */
 double d_ifpsp (int a, float* b, Int* c)
 {
   double ret = a + *b + c->x;
-  fprintf(out,"double f(int,float*,Int*):(%d,0x%p[%f],0x%p[%d])",
+  fprintf(out,"double f(int,(double)float*,Int*):(%d,0x%p[%f],0x%p[%d])",
 		  a, b,*b, c,c->x);
   fflush(out);
   return ret;
