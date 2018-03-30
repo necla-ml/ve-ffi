@@ -1721,5 +1721,7 @@ int
   structure_tests();
   gpargs_boundary_tests();
 
+  printf("test-call: normal exit");
+  fflush(stdout);  
   exit(0);
 }

@@ -158,7 +158,7 @@ static char const* ffi_avalue_str( ffi_type const* const t, void* avalue ){
         case( FFI_TYPE_SINT32     ): DPRINT("%ld",(long   signed) *(SINT32*)avalue); break;
         case( FFI_TYPE_UINT64     ): DPRINT("%lu",(long unsigned) *(UINT64*)avalue); break;
         case( FFI_TYPE_SINT64     ): DPRINT("%ld",(long   signed) *(SINT64*)avalue); break;
-        case( FFI_TYPE_STRUCT     ): DPRINT("struct@%p",*(void**)avalue); break;
+        case( FFI_TYPE_STRUCT     ): DPRINT("struct@%p",(void*)avalue); break;
         case( FFI_TYPE_POINTER    ): DPRINT("ptr@%p",*(void**)avalue); break;
         case( FFI_TYPE_COMPLEX    ):
                                      {
@@ -381,10 +381,13 @@ void ffi_prep_args(char *stack, extended_cif const* const ecif)
     SINT8  reginfo = regflags&0xFF;
 #define STKREG_NEXT do { \
     if(regn < NGREGARG){ \
+        debug(2," regf:%lx,",(unsigned long)regflags); \
         stkreg += sizeof(UINT64); ++regn; \
         regflags >>= 8; reginfo = regflags&0xFF; \
+        debug(2,"->%lx regi=%x ", (unsigned long)regflags, (unsigned)reginfo); \
         for( ; regn<NGREGARG && reginfo<0; ++regn, \
                 regflags>>=8, reginfo=regflags&0xFF ){ \
+            debug(2," Z regi=%x ",(unsigned)reginfo); \
             *(UINT64*)stkreg = 0UL; \
             stkreg+=sizeof(UINT64); \
         } \
@@ -429,23 +432,15 @@ void ffi_prep_args(char *stack, extended_cif const* const ecif)
         int align;
 
         int type = (*p_arg)->type;
-        //debug(3,"\n   a%u[%s]%s",(unsigned)i,ffi_type_detail(*p_arg),ffi_avalue_str(*p_arg,*p_argv));
+        debug(3,"\n   a%u[%s]%s ",(unsigned)i,ffi_type_detail(*p_arg),ffi_avalue_str(*p_arg,*p_argv));
 
         Argclass cls = argclass(*p_arg); /* VE_REGISTER/REFERENCE/BOTH */
-#if 1 /* !defined(FFI_NO_STRUCTS) */
-        if( type == FFI_TYPE_STRUCT ){
-            FFI_ASSERT( type == FFI_TYPE_STRUCT ); /* VE has no special small-struct handling */
-            FFI_ASSERT( cls == VE_REFERENCE );
-            FFI_ASSERT("struct args TBD" == NULL);
-            continue;
-        }
-#endif
-        FFI_ASSERT( cls == VE_REGISTER || cls == VE_BOTH);
+        FFI_ASSERT( cls == VE_REGISTER || cls == VE_BOTH || type == FFI_TYPE_STRUCT );
 
         z = (*p_arg)->size;
         align = (*p_arg)->alignment;
 
-        if (z <= sizeof (UINT64))
+        if (z <= sizeof (UINT64) || type == FFI_TYPE_STRUCT)
         {
             /* these types are passed as single-register (if possible) */
             union uarg_t {
@@ -500,19 +495,32 @@ void ffi_prep_args(char *stack, extended_cif const* const ecif)
                     val.d = *(double *)(*p_argv);
                     break;
 
-                case FFI_TYPE_POINTER:
-                    debug(3," *p_argv=%p ", *(void**)p_argv);
+#if 1 /* !defined(FFI_NO_STRUCTS) */
+                case FFI_TYPE_STRUCT:
+                    FFI_ASSERT( type == FFI_TYPE_STRUCT ); /* VE has no special small-struct handling */
+                    FFI_ASSERT( cls == VE_REFERENCE );
+                    /* Let's hope that the struct MEMORY content has already been set up, and all we
+                       need to do is the pointer-pushing DIRECTLY TO THE avalues[] pointer */
+                    debug(3,"\nSTRUCT-arg pointer: *p_argv=%p ", *(void**)p_argv);
                     *(SINT64*) &val.r1 = (SINT64) *(void**)p_argv;
-                    debug(3," ptr 0x%lx ", (unsigned long)val.r1);
+                    debug(3," *0x%lx = %d ", (unsigned long)val.r1, *(SINT32*)(void*)val.r1);
+                    break;
+#endif
+                case FFI_TYPE_POINTER:
+                    debug(4," *p_argv=%p ", *(void**)p_argv);
+                    *(SINT64*) &val.r1 = (SINT64) *(void**)p_argv;
+                    debug(4," ptr 0x%lx ", (unsigned long)val.r1);
                     break;
 
                 default:
                     FFI_ASSERT("unhandled small type in ffi_prep_args" == NULL);
             }
+            debug(3, " i%uri%x ",(unsigned)i,(unsigned)reginfo);
             if( reginfo == i ){ /* is this a register value? */
                 *(UINT64*)stkreg = val.r1;
-                debug(3," r%lu", (long unsigned)val.r1);
-                //debug(3," r%s", ffi_avalue_str(*p_arg,(void*)&val));
+                //debug(3," r%lu", (long unsigned)val.r1);
+                debug(3," r@%p=%s=%lx", (void*)stkreg, ffi_avalue_str(*p_arg,(void*)&val),
+                        (unsigned long)val.r1);
                 STKREG_NEXT;
                 //if( cls == VE_REGISTER )
                 //    continue; /* ONLY in register */
@@ -520,8 +528,8 @@ void ffi_prep_args(char *stack, extended_cif const* const ecif)
             }
             /* store in arg space ... */
             *(UINT64*)stkarg = val.r1;
-            debug(3," stk%lu", (unsigned long)val.r1);
-            //debug(3," stk%s", ffi_avalue_str(*p_arg,(void*)&val));
+            //debug(3," stk%lu", (unsigned long)val.r1);
+            debug(3," stk%s", ffi_avalue_str(*p_arg,(void*)&val));
             stkarg += 8;
             FFI_ASSERT( stkarg <= stkreg_beg );
         }else if( type ==  FFI_TYPE_LONGDOUBLE ){
@@ -595,27 +603,15 @@ ffi_status ffi_prep_cif_machdep(ffi_cif *cif)
     {
         int regs = 1;
         ffi_type* ffi_type_i = (cif->arg_types)[i];
-        debug(3,"i=%d[%s],greg=%d ",(int)i,ffi_type_detail(ffi_type_i), (int)greg);
+        debug(3,"\ni=%d[%s],greg=%d ",(int)i,ffi_type_detail(ffi_type_i), (int)greg);
         int klas = argclass(ffi_type_i);
 
         if(greg >= NGREGARG) break;
         type = ffi_type_i->type;
         size = ffi_type_i->size;
-        if( klas == VE_REGISTER ){
+        /* if( klas == VE_REGISTER ) ... we now handle structs largely like pointers */
+        if(1) {
             switch(type){
-                case FFI_TYPE_STRUCT:
-                    FFI_ASSERT(klas == VE_REFERENCE);
-                    if (size < sizeof (UINT64))
-                        cif->bytes += sizeof (UINT64) - size;
-                    n = (size + sizeof (UINT64) - 1) / sizeof (UINT64);
-                    if (greg >= NGREGARG){
-                        debug(3," %s:%lx:%u","REF>s7",flags2,(unsigned)greg);
-                        continue;
-                    }else if (greg < NGREGARG){ /* structs use 1 reg, as a pointer */
-                        flags2 += (UINT64)i<<(greg++*8); /* this greg holds arg 'i' (ptr-to-value) */
-                        debug(3," %s:%lx:%u","REF",flags2,(unsigned)greg);
-                    }
-                    break;
                 case FFI_TYPE_LONGDOUBLE: /* also for long double _Imaginary */
                     regs=2; /* and start on even reg */
                     if( greg + (greg&1) + regs <= NGREGARG ){ /* have enough regs! */
@@ -633,6 +629,29 @@ ffi_status ffi_prep_cif_machdep(ffi_cif *cif)
                         for( ; greg<NGREGARG; ++greg ) flags2 += 0xffLU<<(greg*8); /* "skip" */
                         greg = NGREGARG;
                         debug(3," %s:%lx:%u","Done",flags2,(unsigned)greg);
+                    }
+                    break;
+                case FFI_TYPE_STRUCT:
+                    debug(3," Hello struct ");
+                    FFI_ASSERT(klas == VE_REFERENCE);
+                    if (size < sizeof (UINT64))
+                        cif->bytes += sizeof (UINT64) - size;
+                    //n = (size + sizeof (UINT64) - 1) / sizeof (UINT64);
+                    n = 1; /* one register/stack locn, for the pointer */
+                    /* NOTE this is now like the default case but for n=1 */
+                    if (greg >= NGREGARG){
+                        debug(3," [S]cont:n=%u ",(unsigned)n);
+                        continue;
+                    }else if (greg + n > NGREGARG){ /* overflow, do not pass in reg */
+                        for( ; greg<NGREGARG; ++greg ) flags2 += 0xffLU<<(greg*8); /* "skip" */
+                        greg = NGREGARG;
+                        debug(3," [S]%s:%lx:%u","DONE",flags2,(unsigned)greg);
+                    }else{
+                        n += greg;  /* end register# for this arg */
+                        do{
+                            flags2 += (UINT64)i<<(greg++*8); /* this greg holds arg 'i' */
+                            debug(3," [S]%s:%lx:%u","REG",flags2,(unsigned)greg);
+                        }while( greg < n );
                     }
                     break;
 #if 0

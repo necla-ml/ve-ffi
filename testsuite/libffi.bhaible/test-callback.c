@@ -2866,7 +2866,9 @@ int main (void)
 #endif
 
   }
-  
+
+  printf("test-callback: normal exit\n");
+  fflush(stdout);  
   exit(0);
 }
 

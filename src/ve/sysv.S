@@ -320,6 +320,7 @@ sysv_invoke:
 	/* load s0..s7 regs and execute call to fn (%s6-->%s24) */
 	/* How?  A simple [slow] way is to set aside a memory area
 	         and blind-copy into s0..s7. */
+	PRINT_MSG_U64(stack, lea %s0,176(,%sp));
 	lea	%s0,176(,%sp)	#	%s0 = char *stack, 1st in Parameter Area for callee
 	adds.l	%s1,%s20,(58)1	#	cif->bytes - 64 ??
 #if 0 /* no debug */
