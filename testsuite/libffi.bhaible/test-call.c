@@ -436,13 +436,15 @@ void
 
 #if (!defined(DGTEST)) || DGTEST == 19
 #if 0
-  /* new : I've coded libffi to work as follows, to simplify the impl */
-  /* THIS DOES NOT FOLLOW THE LIBFFI CONVENTIONS ELSEWHERE IN TESTSUITE */
-  /* If this works [instead of the original test]
-   * then the impl is missing a layer of indirection while handling pointer args.
-   *
-   * [Personally, putting pointers directly into args[] seems more natural,
+  /* non-standard libffi convention for FFI_TYPE_POINTER is to pass-by-value */
+  /* Works if you set
+   *       libffi ve/ffitarget.h:
+   *              #define VE_POINTER_BY_VALUE 1 */
+
+  /* [Personally, putting pointers directly into args[] seems more natural,
    *  and also simplifies the implementation] */
+
+  /* THIS DOES NOT FOLLOW THE LIBFFI CONVENTIONS ELSEWHERE IN TESTSUITE */
   dr= d_ifpsp(i1,&f5,&I4);
   FPRINTF(out,"->%f\n",dr);
   fflush(out);
@@ -459,6 +461,7 @@ void
   FPRINTF(out,"->%f\n",dr);
   fflush(out);
 #else
+  /* standard libffi convention for FFI_TYPE_POINTER is to pass-by-address */
   dr= d_ifpsp(i1,&f5,&I4);
   FPRINTF(out,"->%f\n",dr);
   fflush(out);
@@ -468,7 +471,10 @@ void
     ffi_cif cif;
     FFI_PREP_CIF(cif,argtypes,ffi_type_double);
     {
-      /*const*/ void* args[] = { &i1, (void*)&f5, (void*)&I4 };
+      /* doesn't this seem like a needless hassle to pass addr-of-ptr? */
+      void* pf5 = &f5;
+      void* pI4 = &I4;
+      /*const*/ void* args[] = { &i1, (void*)&pf5, (void*)&pI4 };
       FFI_CALL(cif,d_ifpsp,args,&dr);
     }
   }
@@ -1764,6 +1770,7 @@ int
   gpargs_boundary_tests();
 
   printf("test-call: normal exit\n");
+  printf("test-call: normal exit\n"); /* print it twice, so uniq doesn't think FAIL */
   fflush(stdout);  
   exit(0);
 }

@@ -1,3 +1,6 @@
+CLOSURE_SUPPORT?=1
+# for VE, check-callback can't work (needs closure API)
+
 prefix ?= ../../install
 ifneq ("$(wildcard $(VE_VE)/lib/libffi.a)","")
 prefix=$(VE_VE)
@@ -18,13 +21,17 @@ LDFLAGS = -L$(libdir) -Wl,-rpath,$(libdir)
 
 #CFLAGS += -fPIC -DPIC -g
 #LDFLAGS += -shared
-
-all: settings check-call check-callback
+CLOSURE_TARGETS:=
+ifeq ($(CLOSURE_SUPPORT),1)
+CLOSURE_TARGETS:=check-callback
+endif
+all: settings check-call $(CLOSURE_TARGETS)
 
 settings:
-	echo "CC        : $(CC)"
-	echo "VE_EXEC   : $(VE_EXEC)"
-	echo "prefix    : $(prefix)"
+	echo "CC              : $(CC)"
+	echo "VE_EXEC         : $(VE_EXEC)"
+	echo "prefix          : $(prefix)"
+	echo "CLOSURE_TARGETS : $(CLOSURE_TARGETS)"
 	ls -l $(prefix)/lib
 
 test-call: test-call.c testcases.c

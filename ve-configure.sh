@@ -9,6 +9,7 @@ echo 'Not using:
    CCAS="nas" \
    AS="ncc" \
    CCASFLAGS="" \
+   --disable-structs \
    '
 
 echo "ve-configure.sh : install PREFIX=$PREFIX"
@@ -19,7 +20,6 @@ echo "                : LDFLAGS=$LDFLAGS"
    --host=ve-unknown-linux-gnu \
    --prefix="$PREFIX" \
    --enable-debug \
-   --disable-structs \
    --disable-raw-api \
    --disable-multi-os-directory \
    $@ \

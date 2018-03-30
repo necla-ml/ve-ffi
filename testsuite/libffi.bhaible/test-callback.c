@@ -2868,6 +2868,7 @@ int main (void)
   }
 
   printf("test-callback: normal exit\n");
+  printf("test-callback: normal exit\n"); /* twice so not flagged as failure */
   fflush(stdout);  
   exit(0);
 }

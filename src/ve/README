@@ -1,3 +1,5 @@
+debug: SYSV_DEBUG in sysv.S and DEBUG_LEVEL in ffi.c
+
 [XVE a1sb2_007 vt]$ (cd build/libffi/src/libffi/testsuite/libffi.bhaible/ && gdb --args test-call)
 
 br ffi_call_SYSV

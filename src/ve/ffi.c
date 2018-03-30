@@ -37,11 +37,14 @@
 #include <math.h>       /* fabs */
 #include <complex.h>
 
-#define DEBUG_LEVEL   5
+#ifndef VE_DEBUG_LEVEL /* now set in ve/ffitarget.h */
+#define VE_DEBUG_LEVEL   5
+#endif
+
 #define FIRST_ARG_BYTE  176 /* 22*8: fp, ret | %tp %got %plt %s17 16*%s18..33 */
 #define ROUND_UP(v, a)  (((size_t)(v) + (a) - 1) & ~((a) - 1))
 
-#define debug(lvl, x...) do { if (lvl <= DEBUG_LEVEL) { printf(x); fflush(stdout); } } while (0)
+#define debug(lvl, x...) do { if (lvl <= VE_DEBUG_LEVEL) { printf(x); fflush(stdout); } } while (0)
 
 #define NGREGARG 8
 //#define NFREGARG 12
@@ -159,7 +162,11 @@ static char const* ffi_avalue_str( ffi_type const* const t, void* avalue ){
         case( FFI_TYPE_UINT64     ): DPRINT("%lu",(long unsigned) *(UINT64*)avalue); break;
         case( FFI_TYPE_SINT64     ): DPRINT("%ld",(long   signed) *(SINT64*)avalue); break;
         case( FFI_TYPE_STRUCT     ): DPRINT("struct@%p",(void*)avalue); break;
+#if VE_POINTER_BY_VALUE
+        case( FFI_TYPE_POINTER    ): DPRINT("ptr@%p",**(void***)avalue); break;
+#else
         case( FFI_TYPE_POINTER    ): DPRINT("ptr@%p",(void*)avalue); break;
+#endif
         case( FFI_TYPE_COMPLEX    ):
                                      {
                                          complex c=*(complex*)avalue;
@@ -508,7 +515,11 @@ void ffi_prep_args(char *stack, extended_cif const* const ecif)
 #endif
                 case FFI_TYPE_POINTER:
                     debug(5," *p_argv=%p ", *(void**)p_argv);
+#if VE_POINTER_BY_VALUE /* easier, but nonstandard according to libffi testsuite? */
                     *(SINT64*) &val.r1 = (SINT64) *(void**)p_argv;
+#else
+                    *(SINT64*) &val.r1 = (SINT64) **(void***)p_argv;
+#endif
                     debug(5," ptr 0x%lx ", (unsigned long)val.r1);
                     break;
 
@@ -613,6 +624,7 @@ ffi_status ffi_prep_cif_machdep(ffi_cif *cif)
         if(1) {
             switch(type){
                 case FFI_TYPE_LONGDOUBLE: /* also for long double _Imaginary */
+                    /* CHECKME, untested */
                     regs=2; /* and start on even reg */
                     if( greg + (greg&1) + regs <= NGREGARG ){ /* have enough regs! */
                         if( greg&1 ){
@@ -635,7 +647,7 @@ ffi_status ffi_prep_cif_machdep(ffi_cif *cif)
                     debug(5," Hello struct ");
                     FFI_ASSERT(klas == VE_REFERENCE);
                     if (size < sizeof (UINT64))
-                        cif->bytes += sizeof (UINT64) - size;
+                        cif->bytes += sizeof (UINT64) - size; /* probably not necessary */
                     //n = (size + sizeof (UINT64) - 1) / sizeof (UINT64);
                     n = 1; /* one register/stack locn, for the pointer */
                     /* NOTE this is now like the default case but for n=1 */

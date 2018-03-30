@@ -55,5 +55,20 @@ typedef enum ffi_abi {
 //#define FFI_TRAMPOLINE_SIZE 32
 //#define FFI_NATIVE_RAW_API 0
 
+/* ----- VE-specific options --------------------------------------------- */
+/* in [0,5] */
+#define VE_DEBUG_LEVEL 0
+/* in [0,1], not very useful at VE_DEBUG_LEVEL 0 */
+#define SYSV_DEBUG 0
+
+/* Optional easier-to-use pass-pointers-by-value convention.
+ *
+ * libffi tests pass ADDR-of-pointer in args[],
+ * rather than directly giving the pointer VALUE.
+ * I don't really understand libffi rationale for this complication.
+ *
+ * Default is 0       to agree with standard libffi convention
+ */
+#define VE_POINTER_BY_VALUE 0
 #endif
 

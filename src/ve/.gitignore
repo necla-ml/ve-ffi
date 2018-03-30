@@ -1,0 +1,12 @@
+ffi.asm
+ffi.c.new
+ffi.c.old
+ffi.diff
+ffi.lst
+sysv.S.new
+sysv.S.old
+sysv.asm
+sysv.asm0
+sysv.d
+sysv.diff
+sysv.lst

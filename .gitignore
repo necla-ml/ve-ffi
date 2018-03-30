@@ -1,4 +1,7 @@
 .libs
+build
+install
+.gitignore
 .deps
 *.o
 *.lo
@@ -12,6 +15,8 @@ compile
 configure
 depcomp
 doc/libffi.info
+**/*.swp
+**/*.sw?
 *~
 fficonfig.h.in
 fficonfig.h
