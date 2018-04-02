@@ -505,6 +505,27 @@ void
   }
   FPRINTF(out,"->%g\n",(double)ldr);
   fflush(out);
+  /* */
+  ldr = ld_fldx5(f1,d1,f2,d2,f3,d3,f4,d4,f5,d5);
+  FPRINTF(out,"->%g\n",(double)ldr);
+  fflush(out);
+  ldr = 0.0; clear_traces();
+  {
+    ffi_type* argtypes[] = {
+	    &ffi_type_float, &ffi_type_longdouble,
+	    &ffi_type_float, &ffi_type_longdouble,
+	    &ffi_type_float, &ffi_type_longdouble,
+	    &ffi_type_float, &ffi_type_longdouble,
+	    &ffi_type_float, &ffi_type_longdouble };
+    ffi_cif cif;
+    FFI_PREP_CIF(cif,argtypes,ffi_type_longdouble);
+    {
+      /*const*/ void* args[] = { &f1, &ld1, &f2, &ld2, &f3, &ld3, &f4, &ld4, &f5, &ld5 };
+      FFI_CALL(cif,ld_fldx5,args,&ldr);
+    }
+  }
+  FPRINTF(out,"->%g\n",(double)ldr);
+  fflush(out);
 #endif
 
 #if (!defined(DGTEST)) || DGTEST == 18

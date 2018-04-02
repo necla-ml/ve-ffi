@@ -7,7 +7,8 @@ used by x86/ffi64.c and x86/uni64.S, should be much faster (avoid a fn call).
 	  - verify in gdb by breaking at "br __stack_grow" disassembling
 	- do alloca just once, in 'C' code, set up the "stack" in ffi.c,
 	  and pass stack pointer to sysv.S
-	- don't need a second stack frame + overhead to call ffi_prep_args
+	- avoids second stack frame overhead of call to ffi_prep_args
+	- main job in assembler is prologue, call fn, retval, epilogue!
 
 -----------------------------------------------
 debug: SYSV_DEBUG in sysv.S and DEBUG_LEVEL in ffi.c. Oh, now in ffitarget.h

@@ -303,26 +303,23 @@ sysv_rfloat:
 	stu	%s0,0(,%s23)	# SPECIAL register-float ---> 4-byte float memory
 	br.w	.L_BoE
 .L1.notfloat:
-#if 1 /* TBD */
 	brne.w.t	FFI_TYPE_LONGDOUBLE,%s21,.L1.notldouble
-sysv_rldouble:
-	ld	%s0,-4*8(,%fp)	# retrieve retval
-	ld	%s1,-3*8(,%fp)
+sysv_rldouble: /* %s0 <---> higher mem address */
+	ld	%s0,-4*8(8,%fp)	# retrieve retval
+	ld	%s1,-4*8(,%fp)
 	st	%s0,0(,%s23)
 	st	%s1,8(,%s23)
 	br.w	.L_BoE
 .L1.notldouble:
-#endif
-#if 0 /* TBD */
 	brne.w.t	FFI_TYPE_COMPLEX,%s21,.L1.notcomplex
 sysv_rcomplex: # double complex ... ?
+	/* 3 cases, differentiated by size/ alignment ??? */
 	ld	%s0,-4*8(,%fp)	# retrieve retval
-	ld	%s1,-3*8(,%fp)
+	ld	%s1,-4*8(8,%fp)
 	st	%s0,0(,%s23)
 	st	%s1,8(,%s23)
 	br.w	.L_BoE
 .L1.notcomplex:
-#endif
 
 #if VE_SYSV_DEBUG > 0 /* sysv_rstruct is a no-op !!! */
 	brne.w.t	FFI_TYPE_STRUCT,%s21,.L1.notstruct

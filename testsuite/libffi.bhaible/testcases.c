@@ -20,6 +20,9 @@
    dark corners of the various ABIs. */
 
 #include <stdio.h>
+#if defined(HAVE_COMPLEX)
+#include <complex.h>
+#endif
 
 FILE* out;
 
@@ -78,6 +81,23 @@ double d1=0.1, d2=0.2, d3=0.3, d4=0.4, d5=0.5, d6=0.6, d7=0.7, d8=0.8, d9=0.9,
 #if defined HAVE_LONG_DOUBLE
 long double ld1=0.1, ld2=0.2, ld3=0.3, ld4=0.4, ld5=0.5, ld6=0.6, ld7=0.7, ld8=0.8, ld9=0.9,
        ld10=1.1, ld11=1.2, ld12=1.3, ld13=1.4, ld14=1.5, ld15=1.6, ld16=1.7, ld17=1.8;
+#endif
+#if defined HAVE_COMPLEX
+float complex fq1=0.1-0.1*I, fq2=0.2-0.2*I, fq3=0.3-0.3*I,
+      fq4=0.4-0.4*I, fq5=0.5-0.5*I, fq6=0.6-0.6*I, fq7=0.7-0.7*I,
+      fq8=0.8-0.8*I, fq9=0.9-0.9*I, fq10=1.1-1.1*I, fq11=1.2-1.2*I,
+      fq12=1.3-1.3*I, fq13=1.4-1.4*I, fq14=1.5-1.5*I, fq15=1.6-1.6*I,
+      fq16=1.7-1.7*I, fq17=1.8-1.8*I;
+double complex dq1=0.1-0.1*I, dq2=0.2-0.2*I, dq3=0.3-0.3*I,
+      dq4=0.4-0.4*I, dq5=0.5-0.5*I, dq6=0.6-0.6*I, dq7=0.7-0.7*I,
+      dq8=0.8-0.8*I, dq9=0.9-0.9*I, dq10=1.1-1.1*I, dq11=1.2-1.2*I,
+      dq12=1.3-1.3*I, dq13=1.4-1.4*I, dq14=1.5-1.5*I, dq15=1.6-1.6*I,
+      dq16=1.7-1.7*I, dq17=1.8-1.8*I;
+long double complex ldq1=0.1-0.1*I, ldq2=0.2-0.2*I, ldq3=0.3-0.3*I,
+      ldq4=0.4-0.4*I, ldq5=0.5-0.5*I, ldq6=0.6-0.6*I, ldq7=0.7-0.7*I,
+      ldq8=0.8-0.8*I, ldq9=0.9-0.9*I, ldq10=1.1-1.1*I, ldq11=1.2-1.2*I,
+      ldq12=1.3-1.3*I, ldq13=1.4-1.4*I, ldq14=1.5-1.5*I, ldq15=1.6-1.6*I,
+      ldq16=1.7-1.7*I, ldq17=1.8-1.8*I;
 #endif
 
 uchar uc1='a', uc2=127, uc3=128, uc4=255, uc5=(uchar)-1;
@@ -290,6 +310,106 @@ long double ld_ld16 (long double a, long double b, long double c, long double d,
   fflush(out);
   return r;
 }
+long double ld_fldx5 (float a, long double b,
+		float c, long double d,
+		float e, long double f,
+		float g, long double h,
+		float i, long double j)
+{
+  long double r=a+b+c+d+e+f+g+h+i+j;
+  fprintf(out,"long double f(5*(float,long double)):(%g,%g,%g,%g,%g,%g,%g,%g,%g,%g)",(double)a,(double)b,(double)c,(double)d,(double)e,(double)f,(double)g,(double)h,(double)i,(double)j);
+  fflush(out);
+  return r;
+}
+#endif
+#if HAVE_COMPLEX
+#if 1 /* float complex tests */
+float complex fq_fq (float complex a)
+{
+  float complex r=a+1.0;
+  fprintf(out,"float complex f(float complex):(%g+%g*I)",
+		  (double)crealf(a), (double)cimagf(a));
+  fflush(out);
+  return r;
+}
+float complex fq_fq2 (float complex a, float complex b)
+{
+  float complex r=a+b;
+  fprintf(out,"float complex f(2*float complex):(%g+%g*I,%g+%g*I)",
+		  (double)crealf(a), (double)cimagf(a),
+		  (double)crealf(b), (double)cimagf(b));
+  fflush(out);
+  return r;
+}
+float complex fq_fq4 (float complex a, float complex b, float complex c, float complex d)
+{
+  float complex r=a+b+c+d;
+  fprintf(out,"float complex f(4*float complex):(%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I)",
+		  (double)crealf(a), (double)cimagf(a),
+		  (double)crealf(b), (double)cimagf(b),
+		  (double)crealf(c), (double)cimagf(c),
+		  (double)crealf(d), (double)cimagf(d));
+  fflush(out);
+  return r;
+}
+float complex fq_fq8 (float complex a, float complex b, float complex c, float complex d, float complex e, float complex f,
+             float complex g, float complex h)
+{
+  float complex r=a+b+c+d+e+f+g+h;
+  fprintf(out,"float complex f(8*float complex):(%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I)",
+		  (double)crealf(a), (double)cimagf(a),
+		  (double)crealf(b), (double)cimagf(b),
+		  (double)crealf(c), (double)cimagf(c),
+		  (double)crealf(d), (double)cimagf(d),
+		  (double)crealf(e), (double)cimagf(e),
+		  (double)crealf(f), (double)cimagf(f),
+		  (double)crealf(g), (double)cimagf(g),
+		  (double)crealf(h), (double)cimagf(h));
+  fflush(out);
+  return r;
+}
+float complex fq_fq16 (float complex a, float complex b, float complex c, float complex d, float complex e, float complex f,
+              float complex g, float complex h, float complex i, float complex j, float complex k, float complex l,
+              float complex m, float complex n, float complex o, float complex p)
+{
+  float complex r=a+b+c+d+e+f+g+h+i+j+k+l+m+n+o+p;
+  fprintf(out,"float complex f(16*float complex):(%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I)",
+		  (double)crealf(a), (double)cimagf(a),
+		  (double)crealf(b), (double)cimagf(b),
+		  (double)crealf(c), (double)cimagf(c),
+		  (double)crealf(d), (double)cimagf(d),
+		  (double)crealf(e), (double)cimagf(e),
+		  (double)crealf(f), (double)cimagf(f),
+		  (double)crealf(g), (double)cimagf(g),
+		  (double)crealf(h), (double)cimagf(h),
+		  (double)crealf(i), (double)cimagf(i),
+		  (double)crealf(j), (double)cimagf(j),
+		  (double)crealf(k), (double)cimagf(k),
+		  (double)crealf(l), (double)cimagf(l),
+		  (double)crealf(m), (double)cimagf(m),
+		  (double)crealf(n), (double)cimagf(n),
+		  (double)crealf(o), (double)cimagf(o),
+		  (double)crealf(p), (double)cimagf(p));
+  fflush(out);
+  return r;
+}
+float complex fq_ffqx5 (float a, float complex b,
+		float c, float complex d,
+		float e, float complex f,
+		float g, float complex h,
+		float i, float complex j)
+{
+  float complex r=a+b+c+d+e+f+g+h+i+j;
+  fprintf(out,"float complex f(5*(float,float complex)):(%g,%g+%g*I,%g,%g+%g*I,%g,%g+%g*I,%g,%g+%g*I,%g,%g+%g*I)",
+		  (double)a,(double)crealf(b),(double)crealf(b),
+		  (double)c,(double)crealf(d),(double)crealf(d),
+		  (double)e,(double)crealf(f),(double)crealf(f),
+		  (double)g,(double)crealf(h),(double)crealf(h),
+		  (double)i,(double)crealf(j),(double)crealf(j));
+  fflush(out);
+  return r;
+}
+#endif /* float complex */
 #endif
 
 /* pointer tests */

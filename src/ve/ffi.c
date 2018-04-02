@@ -150,7 +150,7 @@ static char const* ffi_avalue_str( ffi_type const* const t, void* avalue ){
     switch(t->type){
         case( FFI_TYPE_VOID       ): DPRINT("void"); break;
         case( FFI_TYPE_INT        ): DPRINT("%lu",*(int*)avalue); break;
-        case( FFI_TYPE_FLOAT      ): DPRINT("%f",*(float*)avalue); break;
+        case( FFI_TYPE_FLOAT      ): DPRINT("%f",*(((float*)avalue) + 1)); break; /* NB */
         case( FFI_TYPE_DOUBLE     ): DPRINT("%f",*(double*)avalue); break;
         case( FFI_TYPE_LONGDOUBLE ): DPRINT("%f",(double)*(long double*)avalue); break; /* Hmm. %Lf did not work properly */
         case( FFI_TYPE_UINT8      ): DPRINT("%lu",(long unsigned) *(UINT8*)avalue); break;
@@ -358,11 +358,11 @@ void ffi_prep_args(char *stack, extended_cif* ecif)
     register unsigned int i;
     register unsigned int avn;
     register void **p_argv;
-    register char *stkarg;
+    char *stkarg;
 #if ! defined(FFI_EXTRA_CIF_FIELDS)
 #error "NEC VE relies on machdep having deduce which args go in registers"
 #endif
-    register char *stkreg;      /* for now, last 64 bytes of ecif->cif->bytes are register arg mirrors */
+    char *stkreg; /* for now, last 64 bytes of ecif->cif->bytes are register arg mirrors */
     char* stkreg_beg;
     char* stkreg_end;
     register unsigned int regn;
@@ -388,13 +388,14 @@ void ffi_prep_args(char *stack, extended_cif* ecif)
     SINT8  reginfo = regflags&0xFF;
 #define STKREG_NEXT do { \
     if(regn < NGREGARG){ \
-        debug(4," regf:%lx,",(unsigned long)regflags); \
+        /*debug(4," regf:%lx,",(unsigned long)regflags);*/ \
         stkreg += sizeof(UINT64); ++regn; \
         regflags >>= 8; reginfo = regflags&0xFF; \
-        debug(4,"->%lx regi=%x ", (unsigned long)regflags, (unsigned)reginfo); \
+        /*debug(4,"->%lx regi=%x ", (unsigned long)regflags, (unsigned)reginfo);*/ \
+        debug(4," ri%x ",(unsigned)(UINT8)reginfo); \
         for( ; regn<NGREGARG && reginfo<0; ++regn, \
                 regflags>>=8, reginfo=regflags&0xFF ){ \
-            debug(4," Z regi=%x ",(unsigned)reginfo); \
+            debug(4,"X"); \
             *(UINT64*)stkreg = 0UL; \
             stkreg+=sizeof(UINT64); \
         } \
@@ -453,11 +454,17 @@ void ffi_prep_args(char *stack, extended_cif* ecif)
             /* these types are passed as single-register (if possible) */
             union uarg_t {
                 UINT64 r1;
+                UINT64 u[4];
                 float f[2];
                 double d;
+                double d2[2];
                 long double ld;
+                long double ld2[2];
             } val;
-            val.r1 = 0UL;
+            val.r1 = 0UL;   /* for gdb debug */
+            val.u[1] = 0UL;
+            val.u[2] = 0UL;
+            val.u[3] = 0UL;
 
             switch (type)
             {
@@ -495,8 +502,8 @@ void ffi_prep_args(char *stack, extended_cif* ecif)
                     *(UINT64*) &val.r1 = *(UINT64 *)(*p_argv);
                     break;
 
-                case FFI_TYPE_FLOAT: /* zeroes in 'other' half */
-                    /*val.r1   = 0UL;*/
+                case FFI_TYPE_FLOAT:
+                    val.r1   = 0UL; /* [OPT] zero the other half-register */
                     val.f[1] = *(float*)(*p_argv);
                     break;
 
@@ -534,8 +541,9 @@ void ffi_prep_args(char *stack, extended_cif* ecif)
                 default:
                     FFI_ASSERT("unhandled small type in ffi_prep_args" == NULL);
             }
-            debug(4, " i%uri%x ",(unsigned)i,(unsigned)reginfo);
-            if(z <= 64 || type==FFI_TYPE_STRUCT){
+            debug(4, " i%uri%xz%u ",(unsigned)i,(unsigned)reginfo,(unsigned)z);
+            if(z <= 8 || type==FFI_TYPE_STRUCT){
+                debug(4,"%016lx ", (unsigned long)val.u[0]);
                 if( reginfo == i ){ /* is this a register value? */
                     *(UINT64*)stkreg = val.r1;
                     //debug(3," r%lu", (long unsigned)val.r1);
@@ -549,24 +557,49 @@ void ffi_prep_args(char *stack, extended_cif* ecif)
                 /* store in arg space ... */
                 *(UINT64*)stkarg = val.r1;
                 //debug(3," stk%lu", (unsigned long)val.r1);
-                debug(4," stk%s", ffi_avalue_str(*p_arg,(void*)&val));
+                debug(4," stkarg@%p->%s=%s", (void*)stkarg,
+                        ffi_avalue_str(*p_arg,(void*)&val.r1),
+                        ffi_avalue_str(*p_arg,(void*)stkarg));
                 stkarg += 8;
                 FFI_ASSERT( stkarg <= stkreg_beg );
-            }else if( z>=128 ){
-                /* Multi-registers... longdouble, ?? Complex double */
-                if( type == FFI_TYPE_LONGDOUBLE || z==128/*?*/ ){
+            }else if( type == FFI_TYPE_LONGDOUBLE || z==16/*?*/ ){
+                    debug(4,"%016lx|%016lx ", (unsigned long)val.u[0], (unsigned long)val.u[1]);
                     if( reginfo == i ){
-                        *(long double*)stkreg = val.ld;
+                        /* register area set %s0..7 from low to high addr */
+                        debug(4," %%s%u|%%s%u ",(unsigned)regn,(unsigned)(regn+1));
+                        *(UINT64*)stkreg = val.u[1]; /* lower reg ~ HIGHER mem addr */
                         STKREG_NEXT;
                         FFI_ASSERT( reginfo == i );
+                        *(UINT64*)stkreg = val.u[0];
                         STKREG_NEXT;
                     }
-                    /* store in arg space ... */
+                    /* store in arg space ... mem to mem "normal" copy */
+                    /* BUT: may need to skip if alignment is high (like stkreg) */
+                    FFI_ASSERT( align == 16 );
+                    debug(4," stkarg");
+                    FFI_ASSERT( ((UINT64)stkarg & 0x07UL) == 0UL );
+                    /* *(UINT64*)stkarg &= ~0x07U; */
+                    if( ((UINT64)stkarg) & 0x0fUL ){
+                        if(0){
+                            debug(4,"-Z");
+                            stkarg = (((UINT64)stkarg) + 15UL) & ~0x0fUL;
+                        }else{
+                            debug(4,"-");
+                            while( (UINT64)stkarg & 0x0fUL ){
+                                debug(4,"Z");
+                                *(UINT64*)stkarg = 0UL;
+                                stkarg += 8;
+                            }
+                        }
+                    }
                     *(long double*)stkarg = val.ld;
+                    debug(4, "@%p->ld:%g ",(void*)stkarg,(double)*(long double*)stkarg);
+                    //*(UINT64*)stkarg = val.u[1];
+                    //*((UINT64*)stkarg+1) = val.u[0];
                     stkarg += 2*8;
-                }else{
-                    FFI_ASSERT("Unhandled type" == NULL);
-                }
+            }else{
+                debug(4," UNHANDLED ARG TYPE \n");
+                FFI_ASSERT("Unhandled type" == NULL);
             }
         }
 #if 0
