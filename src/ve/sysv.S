@@ -109,7 +109,7 @@ LABEL:	.asciz STRING; \
 	.balign 8; \
 	.text
 
-#if VE_SYSV_DEBUG <= 0
+#if VE_SYSV_DEBUG > 0			/* NB: these might trash %s63 and %s0..%s2 */
 #define SYSV_SET_DEBUG_REGS \
 	TXT_ADDRESS( %s27, print_s0 ); \
 	TXT_ADDRESS( %s28, print_msg_u64 ); \
@@ -131,10 +131,18 @@ LABEL:	.asciz STRING; \
 	DEFINE_STRING( sysv_str_##NAME, XSTRING ); \
 	TXT_ADDRESS( %s0, sysv_str_##NAME ); \
 	bsic	%lr,(,%s29)
+#define CPRINTF( CFUNC, NAME, XSTRING, LOAD_S1... ) \
+	DEFINE_STRING( sysv_str_##NAME, XSTRING ); \
+	TXT_ADDRESS( %s0, sysv_str_##NAME ); \
+	LOAD_S1; \
+	TXT_ADDRESS( %s63, CFUNC ); \
+	bsic	%lr,(,%s63)
 #else
-#define SET_DEBUG_REGS
+#define SYSV_SET_DEBUG_REGS
 #define PRINT_MSG_U64( NAME, LOAD_S1... )
 #define PRINT_MSG_U64X( NAME, XSTRING, LOAD_S1... )
+#define PRINT_MSG_FLOATX( NAME, XSTRING, LOAD_S1... )
+#define CPRINTF( CFUNC, NAME, XSTRING, LOAD_S1... )
 #endif
 
 
@@ -250,12 +258,14 @@ sysv_invoke:
 	/* load s0..s7 regs and execute call to fn (%s6-->%s24) */
 	/* How?  A simple [slow] way is to set aside a memory area
 	         and blind-copy into s0..s7. */
-	PRINT_MSG_U64(stack, lea %s0,176(,%sp));
+	#PRINT_MSG_U64(stack, lea %s0,176(,%sp));
 	lea	%s0,176(,%sp)	#	%s0 = char *stack, 1st in Parameter Area for callee
 	adds.l	%s1,%s20,(58)1	#	cif->bytes - 64 ??
 #if VE_SYSV_DEBUG > 0 /* debug: need spill register */
 	adds.l	%s33,%s0,%s1	# %s33 : char* stkreg = stack + cif->bytes - 64
-	PRINT_MSG_U64(s33_stkreg,  or %s1,0,%s33 )
+	PRINT_MSG_U64X(s33_stkreg, "s33_stkreg", or %s1,0,%s33 )
+	CPRINTF( print_ptr, ptr_s33_stkreg, " s33_stkreg@", or %s1,0,%s33 )
+	CPRINTF( puts, ptr_bogus, "", nop ) # puts auto-supplies the crlf
 	or	%s63,0,%s33
 #else /* no debug */
 	adds.l	%s63,%s0,%s1	# %s33 : char* stkreg = stack + cif->bytes - 64
@@ -282,6 +292,7 @@ sysv_inv2:				/* CALL "fn" */
 
 sysv_dbg:
 	PRINT_MSG_U64(s0_retval,       or %s1,0,%s0)
+	PRINT_MSG_U64(s1_retval,       ld %s1,-3*8(,%fp))
 	PRINT_MSG_U64(s23_rvalue_ptr,  or %s1,0,%s23)
 	
 sysv_retval:
@@ -312,13 +323,59 @@ sysv_rldouble: /* %s0 <---> higher mem address */
 	br.w	.L_BoE
 .L1.notldouble:
 	brne.w.t	FFI_TYPE_COMPLEX,%s21,.L1.notcomplex
-sysv_rcomplex: # double complex ... ?
+sysv_rcomplex: # ?? complex ... ?
+/*
+	BUG: when enabling printout, I lose float complex correctness ???
+*/
+#if 1 /* differentiate the 3 complex types by rtype->size == 8, 16, or 32 */
+	CPRINTF( puts, sysv_rcomplex, "sysv_rcomplex", nop ) # puts auto-supplies the crlf
+	/* first, find the size of this particular complex return type */
+	or	%s33,0,%s19	# ecif (ptr)
+	CPRINTF( print_ptr, ptr_ecif, "\n\tsysv.S rcomplex: ecif@", or %s1,0,%s33 )
+	ld	%s32,0(0,%s33)	# ecif->cif, OK
+	CPRINTF( print_ptr, ptr_cif, " cif@", or %s1,0,%s32 )
+	ld	%s33,16(0,%s32)	# ecif->cif->rtype
+	CPRINTF( print_ptr, ptr_rtype, " rtype@", or %s1,0,%s33 )
+	lea	%s32,0(,%s33)	# %s32 --> return type structure
+	CPRINTF( print_u64, complex_size, " .sz=", ld %s1,0(,%s32) )
+	CPRINTF( print_u64, complex_align, " .al=", ld2b.zx %s1,0(8,%s32) )
+	CPRINTF( print_u64, complex_type, " .ty=", ld2b.zx %s1,0(10,%s32) )
+#else /* quiet */
+	or	%s33,0,%s19	# ecif (ptr)
+	ld	%s32,0(0,%s33)	# ecif->cif, OK
+	ld	%s33,16(0,%s32)	# ecif->cif->rtype
+	lea	%s32,0(,%s33)	# %s32 --> return type structure
+#endif
+	
+	ld	%s0,0(,%s32)	# retrieve size of the complex type
 	/* 3 cases, differentiated by size/ alignment ??? */
+	brne.l.t	8, %s0 ,.L1.notfloatcomplex
+	CPRINTF( print_u64, rfloatcomplex, "rfloatcomplex stu %s0,1, sz=", ld2b.zx %s1,0(10,%s32) )
+	/* store in rvalue as packed float complex[2] : [z8,a4] */
 	ld	%s0,-4*8(,%fp)	# retrieve retval
-	ld	%s1,-4*8(8,%fp)
-	st	%s0,0(,%s23)
-	st	%s1,8(,%s23)
+	ld	%s1,-3*8(,%fp)
+	stu	%s0,0(,%s23)	# in mem as float complex[s8:a4]
+	stu	%s1,0(4,%s23)
 	br.w	.L_BoE
+.L1.notfloatcomplex:
+	brne.l.t	16,%s0,.L1.notdoublecomplex
+	//CPRINTF( puts, rdoublecomplex, "rdoublecomplex st %s0,1", nop ) # puts auto-supplies the crlf
+	#CPRINTF( print_u64, rdoublecomplex, "rdoublecomplex stu %s0,1, sz=", ld2b.zx %s1,0(10,%s32) )
+	ld	%s0,-4*8(,%fp)	# retrieve retval
+	ld	%s1,-3*8(,%fp)
+	st	%s0,0(,%s23)
+	st	%s1,0(8,%s23)
+	br.w	.L_BoE
+.L1.notdoublecomplex: /* long double complex */
+	#CPRINTF( puts, rldoublecomplex, "rldoublecomplex st %s0,1", nop ) # puts auto-supplies the crlf
+	ld	%s0,-4*8(,%fp)	# retrieve retval [opt]
+	ld	%s1,-3*8(,%fp)
+	ld	%s2,-2*8(,%fp)
+	ld	%s3,-1*8(,%fp)
+	st	%s1,0(,%s23)	# invert 0/1, 2/3 ?
+	st	%s0,0(8,%s23)
+	st	%s3,0(16,%s23)
+	st	%s2,0(24,%s23)
 .L1.notcomplex:
 
 #if VE_SYSV_DEBUG > 0 /* sysv_rstruct is a no-op !!! */

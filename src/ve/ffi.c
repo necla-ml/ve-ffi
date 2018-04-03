@@ -60,6 +60,12 @@ void print_s0_example(UINT64 s0){
 done:
     print_s0(s0);
 }
+void print_ptr(void const* const msg, void* ptr){
+    debug(2, " %s:0x%p ", (char const*)msg, ptr);
+}
+void print_u64(void const* const msg, long unsigned u64){
+    debug(2, " %s:%lu ", (char const*)msg, u64);
+}
 void print_msg_u64(void const* const s0_msg, UINT64 const s1_u64){
     debug(2, " %s:0x%lx,%lu,%ld ", (char const*)s0_msg, (long unsigned)s1_u64,
             (long int)s1_u64, (long unsigned)s1_u64);
@@ -168,11 +174,22 @@ static char const* ffi_avalue_str( ffi_type const* const t, void* avalue ){
         case( FFI_TYPE_POINTER    ): DPRINT("ptr@%p",(void*)avalue); break;
 #endif
         case( FFI_TYPE_COMPLEX    ):
-                                     {
-                                         complex c=*(complex*)avalue;
+                                     if(t->size==8) { /* float complex */
+                                         float complex c=*(float complex*)avalue;
+                                         double r=crealf(c), i=cimagf(c);
+                                         DPRINT("%f%s%f",r,(i<0?"-i*":"+i*"),fabs(i));
+                                     }else if(t->size==16) { /* double complex */
+                                         double complex c=*(double complex*)avalue;
                                          double r=creal(c), i=cimag(c);
                                          DPRINT("%f%s%f",r,(i<0?"-i*":"+i*"),fabs(i));
-                                     } break;
+                                     }else if(t->size==16) { /* double complex */
+                                         long double complex c=*(float complex*)avalue;
+                                         long double r=creall(c), i=cimagl(c);
+                                         DPRINT("%f%s%f",r,(i<0?"-i*":"+i*"),fabsl(i));
+                                     }else{
+                                         FFI_ASSERT("? foo complex ?"==NULL);
+                                     }
+                                     break;
         default: DPRINT("?%p",avalue); break;
     }
     return &buf_avalue[0];
@@ -228,7 +245,7 @@ static char const* ffi_cif_str( ffi_cif const* cif){
         if( n > rem_len ){ rem_len = 0; } \
         else { buf+=n; rem_len-=n; } \
     } while(0)
-    DPRINT("ffi_cif={abi:%d, nargs:%u, arg_types:", cif->abi, cif->nargs);
+    DPRINT("ffi_cif@%p={abi:%d, nargs:%u, arg_types:", (void*)cif, cif->abi, cif->nargs);
     if(cif->arg_types==NULL) DPRINT("NULL");
     else if(cif->nargs <= 0) DPRINT("{}");
     else{
@@ -455,11 +472,16 @@ void ffi_prep_args(char *stack, extended_cif* ecif)
             union uarg_t {
                 UINT64 r1;
                 UINT64 u[4];
-                float f[2];
+                float f[4];
                 double d;
                 double d2[2];
                 long double ld;
                 long double ld2[2];
+#if FFI_TARGET_HAS_COMPLEX_TYPE
+                float complex fq;
+                double complex q;
+                long double complex ldq;
+#endif
             } val;
             val.r1 = 0UL;   /* for gdb debug */
             val.u[1] = 0UL;
@@ -535,14 +557,95 @@ void ffi_prep_args(char *stack, extended_cif* ecif)
                     *(long double*)&val.ld = *(long double*)(*p_argv);
                     break;
                 case FFI_TYPE_COMPLEX:
-                    FFI_ASSERT("prep_args FFI_TYPE_COMPLEX TBD" == NULL);
+                    /*
+                     *
+                     * NOTE
+                     *
+                     *   The memory order can't be tested until ncc-1.0.8 bugs
+                     *   are fixed, but old ABI docs suggest:
+                     *
+                     *   Register order: upper [lower] real, then upper [lower] imag
+                     *                   %s0, %s1, ...
+                     *
+                     *   Memory order:   upper ~ higher address
+                     *
+                     *   For long double complex,
+                     *      Register: %s0 %s1  %s2 %s3  would be stored in
+                     *      Memory:   %s1 %s0  %s3 %s2
+                     *                --real-- --imag--
+                     *      with alignment 16 / begin in even-numbered register
+                     *
+                     */
+                    if( z == 8 ){ /* z==8 (align==4) : float complex */
+                        {
+                            float re = ((float*)*p_argv)[0];
+                            float im = ((float*)*p_argv)[1];
+                            debug(4,"z8(%f,%f) ",(double)re,(double)im);
+                        }
+                        val.u[0] = 0UL;
+                        val.u[1] = 0UL;
+                        val.f[1] = *  (float*)(*p_argv);      /* real */
+                        val.f[3] = * ((float*)(*p_argv) + 1); /* imag */
+                        debug(5," re:%f im:%f",(double)val.f[1],(double)val.f[3]);
+                    }else if( z == 16 ){ /* z==16 (align==8) : double complex */
+                        {
+                            double re = *( ((double*)*p_argv) + 0);
+                            double im = *( ((double*)*p_argv) + 1);
+                            debug(4,"(%f,%f) ",(double)re,(double)im);
+                        }
+                        val.d2[0] = * ((double*)(*p_argv) + 0); /* real */
+                        val.d2[1] = * ((double*)(*p_argv) + 1); /* imag */
+                    }else if( z == 32 ){ /* z==32 (align==16) : long double complex */
+                        {
+                            long double re = *( ((long double*)*p_argv) + 0);
+                            long double im = *( ((long double*)*p_argv) + 1);
+                            debug(4,"(%f,%f) ",(double)re,(double)im);
+                        }
+                        val.ld2[0] = * ((long double*)(*p_argv) + 0); /* real */
+                        val.ld2[1] = * ((long double*)(*p_argv) + 1); /* imag */
+                    }else{
+                        FFI_ASSERT("\n\tprep_args FFI_TYPE_COMPLEX TBD" == NULL);
+                    }
                     break;
 
                 default:
                     FFI_ASSERT("unhandled small type in ffi_prep_args" == NULL);
             }
             debug(4, " i%uri%xz%u ",(unsigned)i,(unsigned)reginfo,(unsigned)z);
-            if(z <= 8 || type==FFI_TYPE_STRUCT){
+            if(0){ ;
+            }else if(type==FFI_TYPE_COMPLEX && (z==8 || z==16)){ /*float complex*/
+                float re = *( ((float*)*p_argv) + 0);
+                float im = *( ((float*)*p_argv) + 0);
+                debug(4,"%016lx|%016lx ", (unsigned long)val.u[0], (unsigned long)val.u[1]);
+                debug(4,"(%f,%f) ",(double)re,(double)im);
+                if( reginfo == i ){
+                    /* register area set %s0..7 from low to high addr */
+                    debug(4," re%%s%u|im%%s%u ",(unsigned)regn,(unsigned)(regn+1));
+                    *(UINT64*)stkreg = val.u[0]; /* lower reg# ~ real */
+                    STKREG_NEXT;
+                    FFI_ASSERT( reginfo == i );
+                    *(UINT64*)stkreg = val.u[1];
+                    STKREG_NEXT;
+                }
+                /* float/double complex do not need to skip registers (align<=8) */
+                FFI_ASSERT( align <= 8 );
+                *( ((UINT64*)stkarg) + 0 ) = 0UL; /* for gdb */
+                *( ((UINT64*)stkarg) + 1 ) = 0UL;
+                if( 1 || reginfo != i /* || argklas == VE_BOTH */ ){
+                    *(UINT64*)stkarg = val.u[0];        /* real <--> LOWER reg# */
+                    *(UINT64*)(stkarg+8) = val.u[1];
+                    if(z==8){ /* float complex */
+                        debug(4, "@%p->fq:%g+%g*I ",(void*)stkarg,
+                                (double)((float*)stkarg)[1], (double)((float*)stkarg)[3] );
+                    }else if(z==16){ /* double complex */
+                        debug(4, "@%p->dq:%g+%g*I ",(void*)stkarg,
+                                (double)((double*)stkarg)[0], (double)((double*)stkarg)[1] );
+                    }
+                }else{
+                    debug(4, "(stkarg-skip) ");
+                }
+                stkarg += 2*8;
+            }else if(z <= 8 || type==FFI_TYPE_STRUCT){
                 debug(4,"%016lx ", (unsigned long)val.u[0]);
                 if( reginfo == i ){ /* is this a register value? */
                     *(UINT64*)stkreg = val.r1;
@@ -554,35 +657,37 @@ void ffi_prep_args(char *stack, extended_cif* ecif)
                     //    continue; /* ONLY in register */
                     FFI_ASSERT( stkreg <= stkreg_end );
                 }
-                /* store in arg space ... */
-                *(UINT64*)stkarg = val.r1;
-                //debug(3," stk%lu", (unsigned long)val.r1);
-                debug(4," stkarg@%p->%s=%s", (void*)stkarg,
-                        ffi_avalue_str(*p_arg,(void*)&val.r1),
-                        ffi_avalue_str(*p_arg,(void*)stkarg));
+                if( reginfo != i /* || argklas == VE_BOTH */ ){
+                    /* store in arg space ... */
+                    *(UINT64*)stkarg = val.r1;
+                    //debug(3," stk%lu", (unsigned long)val.r1);
+                    debug(4," stkarg@%p->%s=%s", (void*)stkarg,
+                            ffi_avalue_str(*p_arg,(void*)&val.r1),
+                            ffi_avalue_str(*p_arg,(void*)stkarg));
+                }
                 stkarg += 8;
                 FFI_ASSERT( stkarg <= stkreg_beg );
             }else if( type == FFI_TYPE_LONGDOUBLE || z==16/*?*/ ){
-                    debug(4,"%016lx|%016lx ", (unsigned long)val.u[0], (unsigned long)val.u[1]);
-                    if( reginfo == i ){
-                        /* register area set %s0..7 from low to high addr */
-                        debug(4," %%s%u|%%s%u ",(unsigned)regn,(unsigned)(regn+1));
-                        *(UINT64*)stkreg = val.u[1]; /* lower reg ~ HIGHER mem addr */
-                        STKREG_NEXT;
-                        FFI_ASSERT( reginfo == i );
-                        *(UINT64*)stkreg = val.u[0];
-                        STKREG_NEXT;
-                    }
+                debug(4,"%016lx|%016lx ", (unsigned long)val.u[0], (unsigned long)val.u[1]);
+                if( reginfo == i ){
+                    /* register area set %s0..7 from low to high addr */
+                    debug(4," %%s%u|%%s%u ",(unsigned)regn,(unsigned)(regn+1));
+                    *(UINT64*)stkreg = val.u[1]; /* lower reg ~ HIGHER mem addr */
+                    STKREG_NEXT;
+                    FFI_ASSERT( reginfo == i );
+                    *(UINT64*)stkreg = val.u[0];
+                    STKREG_NEXT;
+                }
+                if( reginfo != i /* || argklas == VE_BOTH */ ){
                     /* store in arg space ... mem to mem "normal" copy */
                     /* BUT: may need to skip if alignment is high (like stkreg) */
-                    FFI_ASSERT( align == 16 );
                     debug(4," stkarg");
                     FFI_ASSERT( ((UINT64)stkarg & 0x07UL) == 0UL );
                     /* *(UINT64*)stkarg &= ~0x07U; */
                     if( ((UINT64)stkarg) & 0x0fUL ){
                         if(0){
                             debug(4,"-Z");
-                            stkarg = (((UINT64)stkarg) + 15UL) & ~0x0fUL;
+                            stkarg = (void*)((((UINT64)stkarg) + 15UL) & ~0x0fUL);
                         }else{
                             debug(4,"-");
                             while( (UINT64)stkarg & 0x0fUL ){
@@ -593,10 +698,11 @@ void ffi_prep_args(char *stack, extended_cif* ecif)
                         }
                     }
                     *(long double*)stkarg = val.ld;
-                    debug(4, "@%p->ld:%g ",(void*)stkarg,(double)*(long double*)stkarg);
                     //*(UINT64*)stkarg = val.u[1];
                     //*((UINT64*)stkarg+1) = val.u[0];
-                    stkarg += 2*8;
+                    debug(4, "@%p->ld:%g ",(void*)stkarg,(double)*(long double*)stkarg);
+                }
+                stkarg += 2*8;
             }else{
                 debug(4," UNHANDLED ARG TYPE \n");
                 FFI_ASSERT("Unhandled type" == NULL);
@@ -720,18 +826,29 @@ ffi_status ffi_prep_cif_machdep(ffi_cif *cif)
                         }while( greg < n );
                     }
                     break;
-#if 0
-                case FFI_TYPE_LONGDOUBLE_COMPLEX:
-                    regs=4;  /* and start on even reg */
-                    if( greg + (greg&1) + regs <= NGREGARG ){ /* registers available! */
-                        greg += (greg&1); /* maybe skip a reg */
-                        ; //reg_narg[reginf] = (klas<<14) + (greg<<8) & ((UINT8)i<<0);
-                        greg += regs;
-                    }else{
+                case FFI_TYPE_COMPLEX:
+                    FFI_ASSERT( size==8 || size==16 || size==32 );
+                    n = size / 8;
+                    if( size == 8 ){
+                        cif->bytes += 8; /* real, imag each in separate scalar reg */
+                        n = 2;
+                    }
+                    /* long double complex arg may require align==16 (mem,even register) */
+                    if (greg >= NGREGARG){
+                        debug(3," qcont:n=%u ",(unsigned)n);
+                        continue;
+                    }else if (greg + n > NGREGARG){ /* overflow, do not pass in reg */
+                        for( ; greg<NGREGARG; ++greg ) flags2 += 0xffLU<<(greg*8); /* "skip" */
                         greg = NGREGARG;
+                        debug(3," q%s:%u","DONE",flags2,(unsigned)greg);
+                    }else{
+                        n += greg;  /* end register# for this arg */
+                        do{
+                            flags2 += (UINT64)i<<(greg++*8); /* this greg holds arg 'i' */
+                            debug(3," q%s:%u","REG",flags2,(unsigned)greg);
+                        }while( greg < n );
                     }
                     break;
-#endif
                 default:
                     FFI_ASSERT(klas != VE_REFERENCE);
                     FFI_ASSERT(klas == VE_REGISTER); /* size must be <=8, or 16, or 32 */
@@ -748,12 +865,12 @@ ffi_status ffi_prep_cif_machdep(ffi_cif *cif)
                     }else if (greg + n > NGREGARG){ /* overflow, do not pass in reg */
                         for( ; greg<NGREGARG; ++greg ) flags2 += 0xffLU<<(greg*8); /* "skip" */
                         greg = NGREGARG;
-                        debug(3," %s:%lx:%u","DONE",flags2,(unsigned)greg);
+                        debug(3," %s:%u","DONE",flags2,(unsigned)greg);
                     }else{
                         n += greg;  /* end register# for this arg */
                         do{
                             flags2 += (UINT64)i<<(greg++*8); /* this greg holds arg 'i' */
-                            debug(3," %s:%lx:%u","REG",flags2,(unsigned)greg);
+                            debug(3," %s:%u","REG",flags2,(unsigned)greg);
                         }while( greg < n );
                     }
 #if 0 && defined(FFI_EXTRA_CIF_FIELDS) /* this was for some other chip */

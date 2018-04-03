@@ -341,6 +341,14 @@ float complex fq_fq2 (float complex a, float complex b)
   fflush(out);
   return r;
 }
+float complex fq_ffq (float a, float complex b)
+{
+  float complex r=a+b;
+  fprintf(out,"float complex f(float, float complex):(%g,%g+%g*I)",
+		  (double)a, (double)crealf(b), (double)cimagf(b));
+  fflush(out);
+  return r;
+}
 float complex fq_fq4 (float complex a, float complex b, float complex c, float complex d)
 {
   float complex r=a+b+c+d;
@@ -410,6 +418,101 @@ float complex fq_ffqx5 (float a, float complex b,
   return r;
 }
 #endif /* float complex */
+#if 1 /* double complex tests */
+double complex dq_dq (double complex a)
+{
+  double complex r=a+1.0;
+  fprintf(out,"double complex f(double complex):(%g+%g*I)",
+		  (double)creal(a), (double)cimag(a));
+  fflush(out);
+  return r;
+}
+double complex dq_dq2 (double complex a, double complex b)
+{
+  double complex r=a+b;
+  fprintf(out,"double complex f(2*double complex):(%g+%g*I,%g+%g*I)",
+		  (double)creal(a), (double)cimag(a),
+		  (double)creal(b), (double)cimag(b));
+  fflush(out);
+  return r;
+}
+double complex dq_fdq (float a, double complex b)
+{
+  double complex r=a+b;
+  fprintf(out,"double complex f(float, double complex):(%g,%g+%g*I)",
+		  (double)a, (double)creal(b), (double)cimag(b));
+  fflush(out);
+  return r;
+}
+double complex dq_dq4 (double complex a, double complex b, double complex c, double complex d)
+{
+  double complex r=a+b+c+d;
+  fprintf(out,"double complex f(4*double complex):(%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I)",
+		  (double)creal(a), (double)cimag(a),
+		  (double)creal(b), (double)cimag(b),
+		  (double)creal(c), (double)cimag(c),
+		  (double)creal(d), (double)cimag(d));
+  fflush(out);
+  return r;
+}
+double complex dq_dq8 (double complex a, double complex b, double complex c, double complex d, double complex e, double complex f,
+             double complex g, double complex h)
+{
+  double complex r=a+b+c+d+e+f+g+h;
+  fprintf(out,"double complex f(8*double complex):(%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I)",
+		  (double)creal(a), (double)cimag(a),
+		  (double)creal(b), (double)cimag(b),
+		  (double)creal(c), (double)cimag(c),
+		  (double)creal(d), (double)cimag(d),
+		  (double)creal(e), (double)cimag(e),
+		  (double)creal(f), (double)cimag(f),
+		  (double)creal(g), (double)cimag(g),
+		  (double)creal(h), (double)cimag(h));
+  fflush(out);
+  return r;
+}
+double complex dq_dq16 (double complex a, double complex b, double complex c, double complex d, double complex e, double complex f,
+              double complex g, double complex h, double complex i, double complex j, double complex k, double complex l,
+              double complex m, double complex n, double complex o, double complex p)
+{
+  double complex r=a+b+c+d+e+f+g+h+i+j+k+l+m+n+o+p;
+  fprintf(out,"double complex f(16*double complex):(%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I)",
+		  (double)creal(a), (double)cimag(a),
+		  (double)creal(b), (double)cimag(b),
+		  (double)creal(c), (double)cimag(c),
+		  (double)creal(d), (double)cimag(d),
+		  (double)creal(e), (double)cimag(e),
+		  (double)creal(f), (double)cimag(f),
+		  (double)creal(g), (double)cimag(g),
+		  (double)creal(h), (double)cimag(h),
+		  (double)creal(i), (double)cimag(i),
+		  (double)creal(j), (double)cimag(j),
+		  (double)creal(k), (double)cimag(k),
+		  (double)creal(l), (double)cimag(l),
+		  (double)creal(m), (double)cimag(m),
+		  (double)creal(n), (double)cimag(n),
+		  (double)creal(o), (double)cimag(o),
+		  (double)creal(p), (double)cimag(p));
+  fflush(out);
+  return r;
+}
+double complex dq_fdqx5 (float a, double complex b,
+		float c, double complex d,
+		float e, double complex f,
+		float g, double complex h,
+		float i, double complex j)
+{
+  double complex r=a+b+c+d+e+f+g+h+i+j;
+  fprintf(out,"double complex f(5*(float,double complex)):(%g,%g+%g*I,%g,%g+%g*I,%g,%g+%g*I,%g,%g+%g*I,%g,%g+%g*I)",
+		  (double)a,(double)creal(b),(double)creal(b),
+		  (double)c,(double)creal(d),(double)creal(d),
+		  (double)e,(double)creal(f),(double)creal(f),
+		  (double)g,(double)creal(h),(double)creal(h),
+		  (double)i,(double)creal(j),(double)creal(j));
+  fflush(out);
+  return r;
+}
+#endif /* double complex */
 #endif
 
 /* pointer tests */

@@ -33,6 +33,7 @@
 #endif
 
 /* ---- Generic type definitions ----------------------------------------- */
+#define FFI_TARGET_HAS_COMPLEX_TYPE 1
 
 #ifndef LIBFFI_ASM
 typedef unsigned long          ffi_arg;
@@ -46,6 +47,7 @@ typedef enum ffi_abi {
 } ffi_abi;
 
 #define FFI_EXTRA_CIF_FIELDS long unsigned flags2
+
 // TODO
 //#define FFI_TARGET_SPECIFIC_VARIADIC 32
 #endif
@@ -57,9 +59,9 @@ typedef enum ffi_abi {
 
 /* ----- VE-specific options --------------------------------------------- */
 /* in [0,5] */
-#define VE_DEBUG_LEVEL 0
+#define VE_DEBUG_LEVEL 5
 /* in [0,1], not very useful at VE_DEBUG_LEVEL 0 */
-#define SYSV_DEBUG 0
+#define VE_SYSV_DEBUG 1
 
 /* Optional easier-to-use pass-pointers-by-value convention.
  *

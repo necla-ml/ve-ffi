@@ -31,7 +31,7 @@ CLOSURE_TARGETS:=
 ifeq ($(CLOSURE_SUPPORT),1)
 CLOSURE_TARGETS:=check-callback
 endif
-all: settings check-call $(CLOSURE_TARGETS)
+all: settings clean check-call $(CLOSURE_TARGETS)
 
 settings:
 	echo "CC              : $(CC)"

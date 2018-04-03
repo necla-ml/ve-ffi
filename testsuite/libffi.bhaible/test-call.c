@@ -436,7 +436,7 @@ void
 
 #if (!defined(DGTEST)) || DGTEST == 14
   
-  ldr = ld_ld(d1);
+  ldr = ld_ld(ld1);
   FPRINTF(out,"->%g\n",(double)ldr); /* had issues with %Lg */
   fflush(out);
   ldr = 0.0; clear_traces();
@@ -454,7 +454,7 @@ void
 #endif
 
 #if (!defined(DGTEST)) || DGTEST == 15
-  ldr = ld_ld2(d1,d2);
+  ldr = ld_ld2(ld1,ld2);
   FPRINTF(out,"->%g\n",(double)ldr);
   fflush(out);
   ldr = 0.0; clear_traces();
@@ -472,7 +472,7 @@ void
 #endif
 
 #if (!defined(DGTEST)) || DGTEST == 16
-  ldr = ld_ld4(d1,d2,d3,d4);
+  ldr = ld_ld4(ld1,ld2,ld3,ld4);
   FPRINTF(out,"->%g\n",(double)ldr);
   fflush(out);
   ldr = 0.0; clear_traces();
@@ -490,7 +490,7 @@ void
 #endif
 
 #if (!defined(DGTEST)) || DGTEST == 17
-  ldr = ld_ld8(d1,d2,d3,d4,d5,d6,d7,d8);
+  ldr = ld_ld8(ld1,ld2,ld3,ld4,ld5,ld6,ld7,ld8);
   FPRINTF(out,"->%g\n",(double)ldr);
   fflush(out);
   ldr = 0.0; clear_traces();
@@ -506,7 +506,7 @@ void
   FPRINTF(out,"->%g\n",(double)ldr);
   fflush(out);
   /* */
-  ldr = ld_fldx5(f1,d1,f2,d2,f3,d3,f4,d4,f5,d5);
+  ldr = ld_fldx5(f1,ld1,f2,ld2,f3,ld3,f4,ld4,f5,ld5);
   FPRINTF(out,"->%g\n",(double)ldr);
   fflush(out);
   ldr = 0.0; clear_traces();
@@ -529,7 +529,7 @@ void
 #endif
 
 #if (!defined(DGTEST)) || DGTEST == 18
-  ldr = ld_ld16(d1,d2,d3,d4,d5,d6,d7,d8,d9,d10,d11,d12,d13,d14,d15,d16);
+  ldr = ld_ld16(ld1,ld2,ld3,ld4,ld5,ld6,ld7,ld8,ld9,ld10,ld11,ld12,ld13,ld14,ld15,ld16);
   FPRINTF(out,"->%g\n",(double)ldr);
   fflush(out);
   ldr = 0.0; clear_traces();
@@ -548,6 +548,404 @@ void
   return;
 }
 #endif /*HAVE_LONG_DOUBLE*/
+#if HAVE_COMPLEX
+#if 1 /* float complex */
+static void prt_fq(float complex fq){
+  FPRINTF(out,"->%g+%g*I\n",(double)crealf(fq),(double)cimagf(fq));
+  fflush(out);
+}
+void
+  float_complex_tests (void)
+{
+  float complex fqr;
+
+#if (!defined(DGTEST)) || DGTEST == 14
+  
+  fqr = fq_fq(fq1);
+  prt_fq(fqr);
+  fqr = 0.0+0.0*I; clear_traces();
+  {
+    ffi_type* argtypes[] = { &ffi_type_complex_float };
+    ffi_cif cif;
+    FFI_PREP_CIF(cif,argtypes,ffi_type_complex_float);
+    {
+      /*const*/ void* args[] = { &fq1 };
+      FFI_CALL(cif,fq_fq,args,&fqr);
+    }
+  }
+  prt_fq(fqr);
+#endif
+
+#if (!defined(DGTEST)) || DGTEST == 15
+  fqr = fq_fq2(fq1,fq2);
+  prt_fq(fqr);
+  fqr = 0.0; clear_traces();
+  {
+    ffi_type* argtypes[] = { &ffi_type_complex_float, &ffi_type_complex_float };
+    ffi_cif cif;
+    FFI_PREP_CIF(cif,argtypes,ffi_type_complex_float);
+    {
+      /*const*/ void* args[] = { &fq1, &fq2 };
+      FFI_CALL(cif,fq_fq2,args,&fqr);
+    }
+  }
+  prt_fq(fqr);
+
+  fqr = fq_ffq(f1,fq2); /* simple mixed args: what reg does fq2 start in? */
+  prt_fq(fqr);
+  fqr = 0.0; clear_traces();
+  {
+    ffi_type* argtypes[] = { &ffi_type_float, &ffi_type_complex_float };
+    ffi_cif cif;
+    FFI_PREP_CIF(cif,argtypes,ffi_type_complex_float);
+    {
+      /*const*/ void* args[] = { &f1, &fq2 };
+      FFI_CALL(cif,fq_ffq, args,&fqr);
+    }
+  }
+  prt_fq(fqr);
+#endif
+
+#if (!defined(DGTEST)) || DGTEST == 16
+  fqr = fq_fq4(fq1,fq2,fq3,fq4);
+  prt_fq(fqr);
+  fqr = 0.0; clear_traces();
+  {
+    ffi_type* argtypes[] = { &ffi_type_complex_float, &ffi_type_complex_float, &ffi_type_complex_float, &ffi_type_complex_float };
+    ffi_cif cif;
+    FFI_PREP_CIF(cif,argtypes,ffi_type_complex_float);
+    {
+      /*const*/ void* args[] = { &fq1, &fq2, &fq3, &fq4 };
+      FFI_CALL(cif,fq_fq4,args,&fqr);
+    }
+  }
+  prt_fq(fqr);
+#endif
+
+#if 0 /* XXX ncc has a bug passing complex arguments that are NOT within %s0..%s7 */
+#if (!defined(DGTEST)) || DGTEST == 17
+  fqr = fq_fq8(fq1,fq2,fq3,fq4,fq5,fq6,fq7,fq8);
+  prt_fq(fqr);
+  fqr = 0.0; clear_traces();
+  {
+    ffi_type* argtypes[] = {
+	    &ffi_type_complex_float, &ffi_type_complex_float, &ffi_type_complex_float,
+	    &ffi_type_complex_float, &ffi_type_complex_float, &ffi_type_complex_float,
+	    &ffi_type_complex_float, &ffi_type_complex_float };
+    ffi_cif cif;
+    FFI_PREP_CIF(cif,argtypes,ffi_type_complex_float);
+    {
+      /*const*/ void* args[] = { &fq1, &fq2, &fq3, &fq4, &fq5, &fq6, &fq7, &fq8 };
+      FFI_CALL(cif,fq_fq8,args,&fqr);
+    }
+  }
+  prt_fq(fqr);
+  /* */
+  fqr = fq_ffqx5(f1,fq1,f2,fq2,f3,fq3,f4,fq4,f5,fq5);
+  prt_fq(fqr);
+  fqr = 0.0; clear_traces();
+  {
+    ffi_type* argtypes[] = {
+	    &ffi_type_float, &ffi_type_complex_float,
+	    &ffi_type_float, &ffi_type_complex_float,
+	    &ffi_type_float, &ffi_type_complex_float,
+	    &ffi_type_float, &ffi_type_complex_float,
+	    &ffi_type_float, &ffi_type_complex_float };
+    ffi_cif cif;
+    FFI_PREP_CIF(cif,argtypes,ffi_type_complex_float);
+    {
+      /*const*/ void* args[] = { &f1, &fq1, &f2, &fq2, &f3, &fq3, &f4, &fq4, &f5, &fq5 };
+      FFI_CALL(cif,fq_ffqx5,args,&fqr);
+    }
+  }
+  prt_fq(fqr);
+#endif
+
+#if (!defined(DGTEST)) || DGTEST == 18
+  fqr = fq_fq16(fq1,fq2,fq3,fq4,fq5,fq6,fq7,fq8,fq9,fq10,fq11,fq12,fq13,fq14,fq15,fq16);
+  prt_fq(fqr);
+  fqr = 0.0; clear_traces();
+  {
+    ffi_type* argtypes[] = { &ffi_type_complex_float, &ffi_type_complex_float, &ffi_type_complex_float, &ffi_type_complex_float, &ffi_type_complex_float, &ffi_type_complex_float, &ffi_type_complex_float, &ffi_type_complex_float, &ffi_type_complex_float, &ffi_type_complex_float, &ffi_type_complex_float, &ffi_type_complex_float, &ffi_type_complex_float, &ffi_type_complex_float, &ffi_type_complex_float, &ffi_type_complex_float };
+    ffi_cif cif;
+    FFI_PREP_CIF(cif,argtypes,ffi_type_complex_float);
+    {
+      /*const*/ void* args[] = { &fq1, &fq2, &fq3, &fq4, &fq5, &fq6, &fq7, &fq8, &fq9, &fq10, &fq11, &fq12, &fq13, &fq14, &fq15, &fq16 };
+      FFI_CALL(cif,fq_fq16,args,&fqr);
+    }
+  }
+  prt_fq(fqr);
+#endif  
+#endif /* ncc-1.08 bug = doomed to failure */
+
+  return;
+}
+#endif /* float complex */
+#if 1 /* double complex */
+static void prt_dq(double complex dq){
+  FPRINTF(out,"->%g+%g*I\n",(double)creal(dq),(double)cimag(dq));
+  fflush(out);
+}
+void
+  double_complex_tests (void)
+{
+  double complex dqr;
+
+#if (!defined(DGTEST)) || DGTEST == 14
+  
+  dqr = dq_dq(dq1);
+  prt_dq(dqr);
+  dqr = 0.0+0.0*I; clear_traces();
+  {
+    ffi_type* argtypes[] = { &ffi_type_complex_double };
+    ffi_cif cif;
+    FFI_PREP_CIF(cif,argtypes,ffi_type_complex_double);
+    {
+      /*const*/ void* args[] = { &dq1 };
+      FFI_CALL(cif,dq_dq,args,&dqr);
+    }
+  }
+  prt_dq(dqr);
+#endif
+
+#if (!defined(DGTEST)) || DGTEST == 15
+  dqr = dq_dq2(dq1,dq2);
+  prt_dq(dqr);
+  dqr = 0.0; clear_traces();
+  {
+    ffi_type* argtypes[] = { &ffi_type_complex_double, &ffi_type_complex_double };
+    ffi_cif cif;
+    FFI_PREP_CIF(cif,argtypes,ffi_type_complex_double);
+    {
+      /*const*/ void* args[] = { &dq1, &dq2 };
+      FFI_CALL(cif,dq_dq2,args,&dqr);
+    }
+  }
+  prt_dq(dqr);
+
+  dqr = dq_fdq(f1,dq2); /* simple mixed args: what reg does dq2 start in? */
+  prt_dq(dqr);
+  dqr = 0.0; clear_traces();
+  {
+    ffi_type* argtypes[] = { &ffi_type_float, &ffi_type_complex_double };
+    ffi_cif cif;
+    FFI_PREP_CIF(cif,argtypes,ffi_type_complex_double);
+    {
+      /*const*/ void* args[] = { &f1, &dq2 };
+      FFI_CALL(cif,dq_fdq, args,&dqr);
+    }
+  }
+  prt_dq(dqr);
+#endif
+
+#if (!defined(DGTEST)) || DGTEST == 16
+  dqr = dq_dq4(dq1,dq2,dq3,dq4);
+  prt_dq(dqr);
+  dqr = 0.0; clear_traces();
+  {
+    ffi_type* argtypes[] = { &ffi_type_complex_double, &ffi_type_complex_double, &ffi_type_complex_double, &ffi_type_complex_double };
+    ffi_cif cif;
+    FFI_PREP_CIF(cif,argtypes,ffi_type_complex_double);
+    {
+      /*const*/ void* args[] = { &dq1, &dq2, &dq3, &dq4 };
+      FFI_CALL(cif,dq_dq4,args,&dqr);
+    }
+  }
+  prt_dq(dqr);
+#endif
+
+#if 1 /* XXX ncc has a bug passing complex arguments that are NOT within %s0..%s7 */
+#if (!defined(DGTEST)) || DGTEST == 17
+  dqr = dq_dq8(dq1,dq2,dq3,dq4,dq5,dq6,dq7,dq8);
+  prt_dq(dqr);
+  dqr = 0.0; clear_traces();
+  {
+    ffi_type* argtypes[] = {
+	    &ffi_type_complex_double, &ffi_type_complex_double, &ffi_type_complex_double,
+	    &ffi_type_complex_double, &ffi_type_complex_double, &ffi_type_complex_double,
+	    &ffi_type_complex_double, &ffi_type_complex_double };
+    ffi_cif cif;
+    FFI_PREP_CIF(cif,argtypes,ffi_type_complex_double);
+    {
+      /*const*/ void* args[] = { &dq1, &dq2, &dq3, &dq4, &dq5, &dq6, &dq7, &dq8 };
+      FFI_CALL(cif,dq_dq8,args,&dqr);
+    }
+  }
+  prt_dq(dqr);
+  /* */
+  dqr = dq_fdqx5(f1,dq1,f2,dq2,f3,dq3,f4,dq4,f5,dq5);
+  prt_dq(dqr);
+  dqr = 0.0; clear_traces();
+  {
+    ffi_type* argtypes[] = {
+	    &ffi_type_float, &ffi_type_complex_double,
+	    &ffi_type_float, &ffi_type_complex_double,
+	    &ffi_type_float, &ffi_type_complex_double,
+	    &ffi_type_float, &ffi_type_complex_double,
+	    &ffi_type_float, &ffi_type_complex_double };
+    ffi_cif cif;
+    FFI_PREP_CIF(cif,argtypes,ffi_type_complex_double);
+    {
+      /*const*/ void* args[] = { &f1, &dq1, &f2, &dq2, &f3, &dq3, &f4, &dq4, &f5, &dq5 };
+      FFI_CALL(cif,dq_fdqx5,args,&dqr);
+    }
+  }
+  prt_dq(dqr);
+#endif
+
+#if (!defined(DGTEST)) || DGTEST == 18
+  dqr = dq_dq16(dq1,dq2,dq3,dq4,dq5,dq6,dq7,dq8,dq9,dq10,dq11,dq12,dq13,dq14,dq15,dq16);
+  prt_dq(dqr);
+  dqr = 0.0; clear_traces();
+  {
+    ffi_type* argtypes[] = { &ffi_type_complex_double, &ffi_type_complex_double, &ffi_type_complex_double, &ffi_type_complex_double, &ffi_type_complex_double, &ffi_type_complex_double, &ffi_type_complex_double, &ffi_type_complex_double, &ffi_type_complex_double, &ffi_type_complex_double, &ffi_type_complex_double, &ffi_type_complex_double, &ffi_type_complex_double, &ffi_type_complex_double, &ffi_type_complex_double, &ffi_type_complex_double };
+    ffi_cif cif;
+    FFI_PREP_CIF(cif,argtypes,ffi_type_complex_double);
+    {
+      /*const*/ void* args[] = { &dq1, &dq2, &dq3, &dq4, &dq5, &dq6, &dq7, &dq8, &dq9, &dq10, &dq11, &dq12, &dq13, &dq14, &dq15, &dq16 };
+      FFI_CALL(cif,dq_dq16,args,&dqr);
+    }
+  }
+  prt_dq(dqr);
+#endif  
+#endif /* ncc-1.08 bug = doomed to failure */
+
+  return;
+}
+#endif /* double complex */
+#if 0 /* long double complex */
+static void prt_ldq(long double complex ldq){
+  FPRINTF(out,"->%g+%g*I\n",(double)creal(ldq),(double)cimag(ldq));
+  fflush(out);
+}
+void
+  long_double_complex_tests (void)
+{
+  long double complex ldqr;
+
+#if (!defined(DGTEST)) || DGTEST == 14
+  
+  ldqr = ldq_ldq(ldq1);
+  prt_ldq(ldqr);
+  ldqr = 0.0+0.0*I; clear_traces();
+  {
+    ffi_type* argtypes[] = { &ffi_type_complex_longdouble };
+    ffi_cif cif;
+    FFI_PREP_CIF(cif,argtypes,ffi_type_complex_longdouble);
+    {
+      /*const*/ void* args[] = { &ldq1 };
+      FFI_CALL(cif,ldq_ldq,args,&ldqr);
+    }
+  }
+  prt_ldq(ldqr);
+#endif
+
+#if (!defined(DGTEST)) || DGTEST == 15
+  ldqr = ldq_ldq2(ldq1,ldq2);
+  prt_ldq(ldqr);
+  ldqr = 0.0; clear_traces();
+  {
+    ffi_type* argtypes[] = { &ffi_type_complex_longdouble, &ffi_type_complex_longdouble };
+    ffi_cif cif;
+    FFI_PREP_CIF(cif,argtypes,ffi_type_complex_longdouble);
+    {
+      /*const*/ void* args[] = { &ldq1, &ldq2 };
+      FFI_CALL(cif,ldq_ldq2,args,&ldqr);
+    }
+  }
+  prt_ldq(ldqr);
+
+  ldqr = ldq_fldq(f1,ldq2); /* simple mixed args: what reg does ldq2 start in? */
+  prt_ldq(ldqr);
+  ldqr = 0.0; clear_traces();
+  {
+    ffi_type* argtypes[] = { &ffi_type_float, &ffi_type_complex_longdouble };
+    ffi_cif cif;
+    FFI_PREP_CIF(cif,argtypes,ffi_type_complex_longdouble);
+    {
+      /*const*/ void* args[] = { &f1, &ldq2 };
+      FFI_CALL(cif,ldq_fldq, args,&ldqr);
+    }
+  }
+  prt_ldq(ldqr);
+#endif
+
+#if (!defined(DGTEST)) || DGTEST == 16
+  ldqr = ldq_ldq4(ldq1,ldq2,ldq3,ldq4);
+  prt_ldq(ldqr);
+  ldqr = 0.0; clear_traces();
+  {
+    ffi_type* argtypes[] = { &ffi_type_complex_longdouble, &ffi_type_complex_longdouble, &ffi_type_complex_longdouble, &ffi_type_complex_longdouble };
+    ffi_cif cif;
+    FFI_PREP_CIF(cif,argtypes,ffi_type_complex_longdouble);
+    {
+      /*const*/ void* args[] = { &ldq1, &ldq2, &ldq3, &ldq4 };
+      FFI_CALL(cif,ldq_ldq4,args,&ldqr);
+    }
+  }
+  prt_ldq(ldqr);
+#endif
+
+#if 1 /* XXX ncc has a bug passing complex arguments that are NOT within %s0..%s7 */
+#if (!defined(DGTEST)) || DGTEST == 17
+  ldqr = ldq_ldq8(ldq1,ldq2,ldq3,ldq4,ldq5,ldq6,ldq7,ldq8);
+  prt_ldq(ldqr);
+  ldqr = 0.0; clear_traces();
+  {
+    ffi_type* argtypes[] = {
+	    &ffi_type_complex_longdouble, &ffi_type_complex_longdouble, &ffi_type_complex_longdouble,
+	    &ffi_type_complex_longdouble, &ffi_type_complex_longdouble, &ffi_type_complex_longdouble,
+	    &ffi_type_complex_longdouble, &ffi_type_complex_longdouble };
+    ffi_cif cif;
+    FFI_PREP_CIF(cif,argtypes,ffi_type_complex_longdouble);
+    {
+      /*const*/ void* args[] = { &ldq1, &ldq2, &ldq3, &ldq4, &ldq5, &ldq6, &ldq7, &ldq8 };
+      FFI_CALL(cif,ldq_ldq8,args,&ldqr);
+    }
+  }
+  prt_ldq(ldqr);
+  /* */
+  ldqr = ldq_fldqx5(f1,ldq1,f2,ldq2,f3,ldq3,f4,ldq4,f5,ldq5);
+  prt_ldq(ldqr);
+  ldqr = 0.0; clear_traces();
+  {
+    ffi_type* argtypes[] = {
+	    &ffi_type_float, &ffi_type_complex_longdouble,
+	    &ffi_type_float, &ffi_type_complex_longdouble,
+	    &ffi_type_float, &ffi_type_complex_longdouble,
+	    &ffi_type_float, &ffi_type_complex_longdouble,
+	    &ffi_type_float, &ffi_type_complex_longdouble };
+    ffi_cif cif;
+    FFI_PREP_CIF(cif,argtypes,ffi_type_complex_longdouble);
+    {
+      /*const*/ void* args[] = { &f1, &ldq1, &f2, &ldq2, &f3, &ldq3, &f4, &ldq4, &f5, &ldq5 };
+      FFI_CALL(cif,ldq_fldqx5,args,&ldqr);
+    }
+  }
+  prt_ldq(ldqr);
+#endif
+
+#if (!defined(DGTEST)) || DGTEST == 18
+  ldqr = ldq_ldq16(ldq1,ldq2,ldq3,ldq4,ldq5,ldq6,ldq7,ldq8,ldq9,ldq10,ldq11,ldq12,ldq13,ldq14,ldq15,ldq16);
+  prt_ldq(ldqr);
+  ldqr = 0.0; clear_traces();
+  {
+    ffi_type* argtypes[] = { &ffi_type_complex_longdouble, &ffi_type_complex_longdouble, &ffi_type_complex_longdouble, &ffi_type_complex_longdouble, &ffi_type_complex_longdouble, &ffi_type_complex_longdouble, &ffi_type_complex_longdouble, &ffi_type_complex_longdouble, &ffi_type_complex_longdouble, &ffi_type_complex_longdouble, &ffi_type_complex_longdouble, &ffi_type_complex_longdouble, &ffi_type_complex_longdouble, &ffi_type_complex_longdouble, &ffi_type_complex_longdouble, &ffi_type_complex_longdouble };
+    ffi_cif cif;
+    FFI_PREP_CIF(cif,argtypes,ffi_type_complex_longdouble);
+    {
+      /*const*/ void* args[] = { &ldq1, &ldq2, &ldq3, &ldq4, &ldq5, &ldq6, &ldq7, &ldq8, &ldq9, &ldq10, &ldq11, &ldq12, &ldq13, &ldq14, &ldq15, &ldq16 };
+      FFI_CALL(cif,ldq_ldq16,args,&ldqr);
+    }
+  }
+  prt_ldq(ldqr);
+#endif  
+#endif /* ncc-1.08 bug = doomed to failure */
+
+  return;
+}
+#endif /* long double complex */
+#endif /*HAVE_COMPLEX*/
 void
   pointer_tests (void)
 {
@@ -1885,6 +2283,11 @@ int
   double_tests();
 #if HAVE_LONG_DOUBLE
   long_double_tests();
+#endif
+#if HAVE_COMPLEX
+  float_complex_tests();
+  double_complex_tests();
+  //long_double_complex_tests();
 #endif
   pointer_tests();
   mixed_number_tests();
