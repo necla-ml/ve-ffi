@@ -619,6 +619,7 @@ void ffi_prep_args(char *stack, extended_cif* ecif)
             debug(4, " i%uri%xz%u ",(unsigned)i,(unsigned)reginfo,(unsigned)z);
             if(0){ ;
             }else if(type==FFI_TYPE_COMPLEX && (z==8 || z==16)){ /* z==8,16,32 to distinguish 3 cases */
+                FFI_ASSERT( align <= 8 );
                 float re = *( ((float*)*p_argv) + 0);
                 float im = *( ((float*)*p_argv) + 1);
                 debug(4,"%016lx|%016lx ", (unsigned long)val.u[0], (unsigned long)val.u[1]);
@@ -654,7 +655,7 @@ void ffi_prep_args(char *stack, extended_cif* ecif)
                 stkarg += 2*8;
             }else if(type==FFI_TYPE_COMPLEX && z==32){ /* long double complex */
                 FFI_ASSERT( z== 32 );
-                FFI_ASSERT( align > 8 );
+                FFI_ASSERT( align == 16 );
                 double re = *( ((long double*)*p_argv) + 0);
                 double im = *( ((long double*)*p_argv) + 1);
                 debug(4,"%016lx|%016lx ", (unsigned long)val.u[0], (unsigned long)val.u[1]);
@@ -704,7 +705,7 @@ void ffi_prep_args(char *stack, extended_cif* ecif)
                     debug(4, "(stkarg-skip) ");
                 }
                 stkarg += 2*8;
-            }else if( type == FFI_TYPE_LONGDOUBLE || z==16/*?*/ ){
+            }else if( type == FFI_TYPE_LONGDOUBLE ){
                 debug(4,"%016lx|%016lx ", (unsigned long)val.u[0], (unsigned long)val.u[1]);
                 if( reginfo == i ){
                     /* register area set %s0..7 from low to high addr */
@@ -716,6 +717,7 @@ void ffi_prep_args(char *stack, extended_cif* ecif)
                     STKREG_NEXT;
                 }
                 if( reginfo != i /* || argklas == VE_BOTH */ ){
+                    FFI_ASSERT(align == 16);
                     /* store in arg space ... mem to mem "normal" copy */
                     /* BUT: may need to skip if alignment is high (like stkreg) */
                     debug(4," stkarg");
@@ -741,6 +743,7 @@ void ffi_prep_args(char *stack, extended_cif* ecif)
                 }
                 stkarg += 2*8;
             }else if(z <= 8 || type==FFI_TYPE_STRUCT){
+                FFI_ASSERT(align <= 16);
                 debug(4,"%016lx ", (unsigned long)val.u[0]);
                 if( reginfo == i ){ /* is this a register value? */
                     *(UINT64*)stkreg = val.r1;
