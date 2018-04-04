@@ -513,6 +513,101 @@ double complex dq_fdqx5 (float a, double complex b,
   return r;
 }
 #endif /* double complex */
+#if 1 /* long long double complex tests */
+long double complex ldq_ldq (long double complex a)
+{
+  long double complex r=a+1.0;
+  fprintf(out,"long double complex f(long double complex):(%g+%g*I)",
+		  (double)creall(a), (double)cimagl(a));
+  fflush(out);
+  return r;
+}
+long double complex ldq_ldq2 (long double complex a, long double complex b)
+{
+  long double complex r=a+b;
+  fprintf(out,"long double complex f(2*long double complex):(%g+%g*I,%g+%g*I)",
+		  (double)creall(a), (double)cimagl(a),
+		  (double)creall(b), (double)cimagl(b));
+  fflush(out);
+  return r;
+}
+long double complex ldq_fldq (float a, long double complex b)
+{
+  long double complex r=a+b;
+  fprintf(out,"long double complex f(float, long double complex):(%g,%g+%g*I)",
+		  (double)a, (double)creall(b), (double)cimagl(b));
+  fflush(out);
+  return r;
+}
+long double complex ldq_ldq4 (long double complex a, long double complex b, long double complex c, long double complex d)
+{
+  long double complex r=a+b+c+d;
+  fprintf(out,"long double complex f(4*long double complex):(%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I)",
+		  (double)creall(a), (double)cimagl(a),
+		  (double)creall(b), (double)cimagl(b),
+		  (double)creall(c), (double)cimagl(c),
+		  (double)creall(d), (double)cimagl(d));
+  fflush(out);
+  return r;
+}
+long double complex ldq_ldq8 (long double complex a, long double complex b, long double complex c, long double complex d, long double complex e, long double complex f,
+             long double complex g, long double complex h)
+{
+  long double complex r=a+b+c+d+e+f+g+h;
+  fprintf(out,"long double complex f(8*long double complex):(%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I)",
+		  (double)creall(a), (double)cimagl(a),
+		  (double)creall(b), (double)cimagl(b),
+		  (double)creall(c), (double)cimagl(c),
+		  (double)creall(d), (double)cimagl(d),
+		  (double)creall(e), (double)cimagl(e),
+		  (double)creall(f), (double)cimagl(f),
+		  (double)creall(g), (double)cimagl(g),
+		  (double)creall(h), (double)cimagl(h));
+  fflush(out);
+  return r;
+}
+long double complex ldq_ldq16 (long double complex a, long double complex b, long double complex c, long double complex d, long double complex e, long double complex f,
+              long double complex g, long double complex h, long double complex i, long double complex j, long double complex k, long double complex l,
+              long double complex m, long double complex n, long double complex o, long double complex p)
+{
+  long double complex r=a+b+c+d+e+f+g+h+i+j+k+l+m+n+o+p;
+  fprintf(out,"long double complex f(16*long double complex):(%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I)",
+		  (double)creall(a), (double)cimagl(a),
+		  (double)creall(b), (double)cimagl(b),
+		  (double)creall(c), (double)cimagl(c),
+		  (double)creall(d), (double)cimagl(d),
+		  (double)creall(e), (double)cimagl(e),
+		  (double)creall(f), (double)cimagl(f),
+		  (double)creall(g), (double)cimagl(g),
+		  (double)creall(h), (double)cimagl(h),
+		  (double)creall(i), (double)cimagl(i),
+		  (double)creall(j), (double)cimagl(j),
+		  (double)creall(k), (double)cimagl(k),
+		  (double)creall(l), (double)cimagl(l),
+		  (double)creall(m), (double)cimagl(m),
+		  (double)creall(n), (double)cimagl(n),
+		  (double)creall(o), (double)cimagl(o),
+		  (double)creall(p), (double)cimagl(p));
+  fflush(out);
+  return r;
+}
+long double complex ldq_fldqx5 (float a, long double complex b,
+		float c, long double complex d,
+		float e, long double complex f,
+		float g, long double complex h,
+		float i, long double complex j)
+{
+  long double complex r=a+b+c+d+e+f+g+h+i+j;
+  fprintf(out,"long double complex f(5*(float,long double complex)):(%g,%g+%g*I,%g,%g+%g*I,%g,%g+%g*I,%g,%g+%g*I,%g,%g+%g*I)",
+		  (double)a,(double)creall(b),(double)creall(b),
+		  (double)c,(double)creall(d),(double)creall(d),
+		  (double)e,(double)creall(f),(double)creall(f),
+		  (double)g,(double)creall(h),(double)creall(h),
+		  (double)i,(double)creall(j),(double)creall(j));
+  fflush(out);
+  return r;
+}
+#endif /* long long double complex */
 #endif
 
 /* pointer tests */

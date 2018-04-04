@@ -813,7 +813,7 @@ void
   return;
 }
 #endif /* double complex */
-#if 0 /* long double complex */
+#if 1 /* long double complex */
 static void prt_ldq(long double complex ldq){
   FPRINTF(out,"->%g+%g*I\n",(double)creal(ldq),(double)cimag(ldq));
   fflush(out);
@@ -870,6 +870,7 @@ void
   prt_ldq(ldqr);
 #endif
 
+#if 0 /* XXX ncc has a bug passing long double complex arguments that are NOT within %s0..%s7 */
 #if (!defined(DGTEST)) || DGTEST == 16
   ldqr = ldq_ldq4(ldq1,ldq2,ldq3,ldq4);
   prt_ldq(ldqr);
@@ -886,7 +887,6 @@ void
   prt_ldq(ldqr);
 #endif
 
-#if 1 /* XXX ncc has a bug passing complex arguments that are NOT within %s0..%s7 */
 #if (!defined(DGTEST)) || DGTEST == 17
   ldqr = ldq_ldq8(ldq1,ldq2,ldq3,ldq4,ldq5,ldq6,ldq7,ldq8);
   prt_ldq(ldqr);
@@ -2287,7 +2287,7 @@ int
 #if HAVE_COMPLEX
   float_complex_tests();
   double_complex_tests();
-  //long_double_complex_tests();
+  long_double_complex_tests();
 #endif
   pointer_tests();
   mixed_number_tests();
