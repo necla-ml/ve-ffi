@@ -629,9 +629,12 @@ void ffi_prep_args(char *stack, extended_cif* ecif)
                     debug(4," re%%s%u|im%%s%u ",(unsigned)regn,(unsigned)(regn+1));
                     *(UINT64*)stkreg = val.u[0]; /* lower reg# ~ real */
                     STKREG_NEXT;
-                    FFI_ASSERT( reginfo == i );
-                    *(UINT64*)stkreg = val.u[1];
+                    //FFI_ASSERT( reginfo == i ); // no longer true if can split real/imag across %s7 !!!
+                    if( reginfo == i )
+                        *(UINT64*)stkreg = val.u[1];
+                    else FFI_ASSERT( regn >= NGREGARG );
                     STKREG_NEXT;
+                    
                 }
                 /* float/double complex do not need to skip registers (align<=8) */
                 FFI_ASSERT( align <= 8 );
@@ -903,19 +906,22 @@ ffi_status ffi_prep_cif_machdep(ffi_cif *cif)
                     if (sk + greg >= NGREGARG){
                         debug(3," qcont:n=%u ",(unsigned)n);
                         continue;
+#if 0 /* the following disallows complex begin partially in register and partially in mem */
                     }else if (sk + greg + n > NGREGARG){ /* overflow, do not pass in reg */
                         for( ; greg<NGREGARG; ++greg ) flags2 += 0xffLU<<(greg*8); /* "skip" */
                         greg = NGREGARG;
                         debug(3," q%s:%u","DONE",flags2,(unsigned)greg);
+#endif /* but it seems complex CAN split with real in register and imaginary in mem !!! */
                     }else{
                         for(int s=0; s<sk; ++s){
                             flags2 += 0xffLU<<(greg++*8);
-                            debug(3," %s:%lx:%u","ldSKIP",flags2,(unsigned)greg);
+                            debug(3," %s:%08x,g%u","ldSKIP",flags2,(unsigned)greg);
                         }
                         n += sk + greg;  /* end register# for this arg */
+                        if( n > NGREGARG ) n = NGREGARG; /* NEW and surprising */
                         do{
                             flags2 += (UINT64)i<<(greg++*8); /* this greg holds arg 'i' */
-                            debug(3," q%s:%u","REG",flags2,(unsigned)greg);
+                            debug(3," q%s:%08x,g%u","REG",flags2,(unsigned)greg);
                         }while( greg < n );
                     }
                     break;

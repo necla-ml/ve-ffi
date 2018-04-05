@@ -599,11 +599,11 @@ long double complex ldq_fldqx5 (float a, long double complex b,
 {
   long double complex r=a+b+c+d+e+f+g+h+i+j;
   fprintf(out,"long double complex f(5*(float,long double complex)):(%g,%g+%g*I,%g,%g+%g*I,%g,%g+%g*I,%g,%g+%g*I,%g,%g+%g*I)",
-		  (double)a,(double)creall(b),(double)creall(b),
-		  (double)c,(double)creall(d),(double)creall(d),
-		  (double)e,(double)creall(f),(double)creall(f),
-		  (double)g,(double)creall(h),(double)creall(h),
-		  (double)i,(double)creall(j),(double)creall(j));
+		  (double)a,(double)creall(b),(double)cimagl(b),
+		  (double)c,(double)creall(d),(double)cimagl(d),
+		  (double)e,(double)creall(f),(double)cimagl(f),
+		  (double)g,(double)creall(h),(double)cimagl(h),
+		  (double)i,(double)creall(j),(double)cimagl(j));
   fflush(out);
   return r;
 }

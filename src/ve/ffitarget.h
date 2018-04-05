@@ -59,9 +59,9 @@ typedef enum ffi_abi {
 
 /* ----- VE-specific options --------------------------------------------- */
 /* in [0,5] */
-#define VE_DEBUG_LEVEL 5
+#define VE_DEBUG_LEVEL 0
 /* in [0,1], not very useful at VE_DEBUG_LEVEL 0 */
-#define VE_SYSV_DEBUG 1
+#define VE_SYSV_DEBUG 0
 
 /* Optional easier-to-use pass-pointers-by-value convention.
  *

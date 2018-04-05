@@ -1,3 +1,4 @@
+/* vim: set sw=12 ts=12 noet */
 /* -----------------------------------------------------------------------
    sysv.S - Copyright (c) 2018, NEC Labs America, LLC
    
@@ -95,12 +96,25 @@
 	sic	%lr; \
 	lea.sl	%s12,LABEL@PLT_HI(%s12,%lr); \
 	or	REG,%s12,(0)1
+	/* I think I prefer .macro ... Wish I had docs, though.  "Write and hope" here... */
+	/* check with -Wa,-m fro macro expansion results (see Makefile for nas example) */
+.macro addr_s12 LABEL			# clobbers s12
+	lea	%s12, \LABEL@PLT_LO(-24)
+	and	%s12,%s12,(32)0
+	sic	%lr
+	lea.sl	%s12,\LABEL@PLT_HI(%s12,%lr)
+.endm
 #else
 #define TXT_ADDRESS( REG, LABEL ) \
 	lea	%s12, LABEL@LO; \
 	and	%s12,%s12,(32)0; \
 	lea.sl	%s12,LABEL@HI(,%s12); \
 	or	REG,%s12,(0)1
+.macro addr_s12 LABEL:req
+	lea	%s12, \LABEL@LO
+	and	%s12,%s12,(32)0
+	lea.sl	%s12,\LABEL@HI(,%s12)
+.endm
 #endif
 #define DEFINE_STRING( LABEL,STRING ) \
 .section .rodata; \
@@ -109,7 +123,60 @@ LABEL:	.asciz STRING; \
 	.balign 8; \
 	.text
 
+.macro prt_str STRING # clobbers %s12,%s42
+	.section .rodata
+	.local	Lprt_str\@
+Lprt_str\@:	.asciz	"\STRING"
+	.balign 	8
+	.text
+	or	%s42,0,%s0	# spill
+	addr_s12 	Lprt_str\@
+	or	%s0,0,%s12
+	addr_s12	puts
+	bsic	%lr,(,%s12)
+	or	%s0,0,%s42	# restore
+.endm
+.macro swap_reg A,B	# A,B MUST be different registers %s0..%s63
+	xor	\A,\A,\B
+	xor	\B,\A,\A
+	xor	\A,\A,\B
+.endm
+
+
+#if 0 /* can I set up a macro to cycle through a set of tmp registers? */
+	/* I probably need assembler macro documentation to succeed! */
+	.set	TMP_CTR, 40
+.macro TMP_REG_SET CTR
+	.set	TMP_REG, %s\CTR
+.endm
+.macro next_tmp
+	.set	TMP_CTR, TMP_CTR+1
+	.ifge	TMP_CTR - 43
+	.set	TMP_CTR, 40
+	.endif
+.endm
+	.eqv	RTMP, TMP_REG
+
+.text
+.align 16
+foo_bar:
+	and	RTMP,0,(1)0
+	next_tmp
+	TMP_REG_SET	(TMP_CTR)
+	and	RTMP,0,(1)0
+#endif
+#if 0 /* test code ... */
+foo_bar:
+	ASMDBG(prt_str		"Hello ")
+	ASMDBG(prt_str		"World\n")
+	swap_reg %s0,%s1
+	swap_reg %s0,%s1
+#endif
+	
+	#CPRINTF( puts, ptr_bogus, "", nop ) # puts auto-supplies the crlf
+
 #if VE_SYSV_DEBUG > 0			/* NB: these might trash %s63 and %s0..%s2 */
+#define ASMDBG( STUFF... ) STUFF
 #define SYSV_SET_DEBUG_REGS \
 	TXT_ADDRESS( %s27, print_s0 ); \
 	TXT_ADDRESS( %s28, print_msg_u64 ); \
@@ -138,6 +205,7 @@ LABEL:	.asciz STRING; \
 	TXT_ADDRESS( %s63, CFUNC ); \
 	bsic	%lr,(,%s63)
 #else
+#define ASMDBG( STUFF... )
 #define SYSV_SET_DEBUG_REGS
 #define PRINT_MSG_U64( NAME, LOAD_S1... )
 #define PRINT_MSG_U64X( NAME, XSTRING, LOAD_S1... )
@@ -260,7 +328,7 @@ sysv_invoke:
 	         and blind-copy into s0..s7. */
 	#PRINT_MSG_U64(stack, lea %s0,176(,%sp));
 	lea	%s0,176(,%sp)	#	%s0 = char *stack, 1st in Parameter Area for callee
-	adds.l	%s1,%s20,(58)1	#	cif->bytes - 64 ??
+	adds.l	%s1,%s20,(58)1	#	cif->bytes - 64 (isn't there a better syntax here?)
 #if VE_SYSV_DEBUG > 0 /* debug: need spill register */
 	adds.l	%s33,%s0,%s1	# %s33 : char* stkreg = stack + cif->bytes - 64
 	PRINT_MSG_U64X(s33_stkreg, "s33_stkreg", or %s1,0,%s33 )
@@ -443,6 +511,7 @@ sysv_ret:
 	b.l	(,%lr)
 .L_EoE: #end of epilogue
 	.cfi_endproc
+	.size	ffi_call_SYSV, . - ffi_call_SYSV
 # --------------------------- END --------- no useful code follows ------------
 #if 0
 VE ABI notes (these examples from Ch. 8 docs seem good)
