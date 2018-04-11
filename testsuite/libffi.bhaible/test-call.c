@@ -622,7 +622,7 @@ void
   prt_fq(fqr);
 #endif
 
-#if 0 /* XXX ncc has a bug passing complex arguments that are NOT within %s0..%s7 */
+#if 1 /* XXX ncc has a bug passing complex arguments that are NOT within %s0..%s7 */
 #if (!defined(DGTEST)) || DGTEST == 17
   fqr = fq_fq8(fq1,fq2,fq3,fq4,fq5,fq6,fq7,fq8);
   prt_fq(fqr);
@@ -870,7 +870,7 @@ void
   prt_ldq(ldqr);
 #endif
 
-#if 0 /* XXX ncc has a bug passing long double complex arguments that are NOT within %s0..%s7 */
+#if 1 /* XXX ncc has a bug passing long double complex arguments that are NOT within %s0..%s7 */
 #if (!defined(DGTEST)) || DGTEST == 16
   ldqr = ldq_ldq4(ldq1,ldq2,ldq3,ldq4);
   prt_ldq(ldqr);

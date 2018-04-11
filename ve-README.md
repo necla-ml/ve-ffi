@@ -1,12 +1,54 @@
+## How to Cross Compile libffi for NEC VE "Aurora" processor
 
-## How to Cross Compile OSS
+~
+source ~/kruus/vt/env.bash --ve # or however you set up ncc environment
+. ve-autogen.sh >& ve-autogen.log
+~
+
+Local build --> ./install/
+~
+. ve-local-conf.sh >& ve-local-conf.log
+cd build && make
+make install
+~
+
+Local test
+~
+rm "${VE_VE}/lib/libffi*"   # if you have some alternate (conflicting) install location
+cd testsuite/libffi.bhaible # this does not need expect or tk like rest of libffi testsuite
+make clean; make
+# or just ..
+(cd testsuite/libffi.bhaible/; make clean; make VERBOSE=1; ) >& tst.log
+~
+
+debugging output (NEC ve had issues with passing various complex types as arguments)
+Edit src/ve/ffitarget.h and change debug flags:
+~
+/* ----- VE-specific options --------------------------------------------- */
+/* in [0,5] */
+#define VE_DEBUG_LEVEL 5
+/* in [0,1], not very useful at VE_DEBUG_LEVEL 0 */
+#define VE_SYSV_DEBUG 1
+~
+
+rebuild, reinstall, test again, run gdb and set breakpoints as per
+src/ve/ffi.c and src/ve/sysv.S
+
+To fix ABI issues when ncc changes, please rebuild the asm-examples/ and
+look at actually ncc output to find out what the ABI is currently doing.
+
+~
+cd ../../asm-examples # if you are in src/git/libffi for vtorch project
+. doit.sh
+ls -l asm
+~
+
+### older hints ...
+
 From Japan internal wiki:
 - autoreconf
   - I had to add some search directories, to avoid missing includes:
-
-ve-autogen.sh
 ~
-source ~/kruus/vt/env.bash --ve
 autoreconf -B /opt/nec/ve/share/autoconf-1.13 -B /opt/nec/ve/share/libtool/config -v -i
 ~
 

@@ -1,4 +1,10 @@
+You can run 'make' in this directory as a quick test that your debug work
+compiles, before trying to rebuild the whole project
 
+This will, as a bonus, produce assembler listings that may help your debug
+and gdb work.
+
+-----------------------------------------------
 EFFICIENCY: now that things basically work, we MIGHT try to avoid prep_args
 completely by doing a single alloca for the stack in ffi.c.  This approach,
 used by x86/ffi64.c and x86/uni64.S, should be much faster (avoid a fn call).

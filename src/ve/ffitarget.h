@@ -59,7 +59,7 @@ typedef enum ffi_abi {
 
 /* ----- VE-specific options --------------------------------------------- */
 /* in [0,5] */
-#define VE_DEBUG_LEVEL 0
+#define VE_DEBUG_LEVEL 5
 /* in [0,1], not very useful at VE_DEBUG_LEVEL 0 */
 #define VE_SYSV_DEBUG 0
 
