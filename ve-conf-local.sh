@@ -1,9 +1,17 @@
 #PREFIX=`pwd`/install
 OPTS='-g2 -O1 -fPIC'
 OPTS='-g2 -O1'
+if [ 0 -eq 1 ]; then
+	# max tracing/debug
+	OPTS="${OPTS} -DVE_DEBUG_LEVEL=5 -DVE_SYSV_DEBUG=1"
+fi
 BUILDDIR=build
 INSTALLDIR=install
 PREFIX="`pwd`/${INSTALLDIR}"
+echo "OPTS			    : ${OPTS}"
+echo "BUILDDIR			: ${BUILDDIR}"
+echo "INSTALLDIR		: ${INSTALLDIR}"
+echo "PREFIX			  : ${PREFIX}"
 if [ -f ~/kruus/vt/env.bash ]; then
        source ~/kruus/vt/env.bash --ve
 fi
@@ -44,5 +52,4 @@ cd "${BUILDDIR}";
 }
 cd "$rootdir"
 # nstrip not determined correctly?
-
-
+# vim: sw=2 ts=2 et

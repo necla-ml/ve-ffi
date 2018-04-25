@@ -363,7 +363,6 @@ float complex fq_fq4 (float complex a, float complex b, float complex c, float c
 float complex fq_fq8 (float complex a, float complex b, float complex c, float complex d, float complex e, float complex f,
              float complex g, float complex h)
 {
-  float complex r=a+b+c+d+e+f+g+h;
   fprintf(out,"float complex f(8*float complex):(%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I)",
 		  (double)crealf(a), (double)cimagf(a),
 		  (double)crealf(b), (double)cimagf(b),
@@ -374,6 +373,7 @@ float complex fq_fq8 (float complex a, float complex b, float complex c, float c
 		  (double)crealf(g), (double)cimagf(g),
 		  (double)crealf(h), (double)cimagf(h));
   fflush(out);
+  float complex r=a+b+c+d+e+f+g+h;
   return r;
 }
 float complex fq_fq16 (float complex a, float complex b, float complex c, float complex d, float complex e, float complex f,

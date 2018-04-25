@@ -24,9 +24,15 @@ LDFLAGS = -L$(libdir) -Wl,-rpath,$(libdir)
 #CPPFLAGS += -I../../@target_triplet@ # for fficonfig, for optional types
 HAVE_LONG_DOUBLE?=1
 CPPFLAGS+=-DHAVE_LONG_DOUBLE=$(HAVE_LONG_DOUBLE) -DHAVE_COMPLEX=$(COMPLEX_SUPPORT)
+VERBOSE_FLAGS:=-DVE_DEBUG_LEVEL=5 -DVE_SYSV_DEBUG=1
+
+# -g triggers a compiler assertion in ncc-1.1.2
+#CFLAGS+=-g
 
 #CFLAGS += -fPIC -DPIC -g
 #LDFLAGS += -shared
+PIC_FLAGS:=-fPIC -DPIC -shared
+
 CLOSURE_TARGETS:=
 ifeq ($(CLOSURE_SUPPORT),1)
 CLOSURE_TARGETS:=check-callback
@@ -40,8 +46,11 @@ settings:
 	echo "CLOSURE_TARGETS : $(CLOSURE_TARGETS)"
 	ls -l $(prefix)/lib
 
-test-call: test-call.c testcases.c
+test-call test-call-v test-call-pic test-call-pic-v: test-call.c testcases.c
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -o test-call test-call.c -lffi
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $(PIC_FLAGS) -o test-call-pic test-call.c -lffi
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $(VERBOSE_FLAGS) -o test-call-v test-call.c -lffi
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $(PIC_FLAGS) $(VERBOSE_FLAGS) -o test-call-pic-v test-call.c -lffi
 
 test-callback: test-callback.c testcases.c
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -o test-callback test-callback.c -lffi
@@ -50,6 +59,11 @@ check-call: test-call
 	$(VE_EXEC) ./test-call 2>&1 | tee test-call.out
 	LC_ALL=C uniq -u < test-call.out > failed-call
 	test '!' -s failed-call
+
+check-call-pic: test-call-pic
+	$(VE_EXEC) $< 2>&1 | tee $<.out
+	LC_ALL=C uniq -u < $<.out > failed-call-pic
+	test '!' -s failed-call-pic
 
 check-callback: test-callback
 	$(VE_EXEC) ./test-callback 2>&1 | tee test-callback.out

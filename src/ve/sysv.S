@@ -97,7 +97,7 @@
 	lea.sl	%s12,LABEL@PLT_HI(%s12,%lr); \
 	or	REG,%s12,(0)1
 	/* I think I prefer .macro ... Wish I had docs, though.  "Write and hope" here... */
-	/* check with -Wa,-m fro macro expansion results (see Makefile for nas example) */
+	/* check with -Wa,-m for macro expansion results (see Makefile for nas example) */
 .macro addr_s12 LABEL			# clobbers s12
 	lea	%s12, \LABEL@PLT_LO(-24)
 	and	%s12,%s12,(32)0
@@ -145,30 +145,103 @@ Lprt_str\@:	.asciz	"\STRING"
 
 #if 0 /* can I set up a macro to cycle through a set of tmp registers? */
 	/* I probably need assembler macro documentation to succeed! */
+	/* to do fancy stuff like symbolic reg names, probably easiest
+		to switch to m4 */
 	.set	TMP_CTR, 40
+.altmacro
+.macro SCALAR_REG n
+	.set	REG,%s\n
+.endm
+.noaltmacro
 .macro TMP_REG_SET CTR
 	.set	TMP_REG, %s\CTR
 .endm
-.macro next_tmp
+#define PRIMITVE_CAT(a,...) a ## __VA_ARGS__
+#define CAT(a,...) PRIMITIVE_CAT(a, __VA_ARGS__)
+
+#define IIF(c) PRIMITIVE_CAT(IIF_, c)
+#define IIF_0(t, ...) __VA_ARGS__
+#define IIF_1(t, ...) t
+
+#define INC(X) PRIMITIVE_CAT(INC_,x)
+#define INC_0 1
+#define INC_1 2
+#define INC_2 0
+#define NXT() 
+	# JUNK .set asdf, INC(0)
+
+#define S(CNT) %s##CNT
+#define EVAL(EXPR) EXPR
+#define MOD(N,M) EVAL(N%M)
+#define NEXT_CYC(n) PRIMITIVE_CAT(CYC_,n)
+#define CYC_0 %s40
+#define CYC_1 %s41
+#define CYC_2 %s42
+#define CYC_3 $s40
+
+
+#define VALUE_TO_STRING(...) #__VA_ARGS__
+#define VALUE(...) VALUE_TO_STRING(__VA_ARGS__)
+#define VAR_NAME_VALUE(var) #var " = " VALUE(var)
+#pragma message  VAR_NAME_VALUE( MOD(5,2) )
+
+#define CHECK_N(x,n,...) n
+#define CHECK(...) CHECK_N(__VA_ARGS__, 0,)
+#define PROBE(x) x, 1, // CHECK(PROBE(~)) expands to 1, but CHECK(xxx) [single-token] expands to 0
+#define PROBE_EQU_42(x) x, 42
+
+.altmacro
+.macro TMP_REG_NAME name,ctr
+	.set	\name,\ctr		# OK
+	#.set	\name&,%s\ctr# BAD
+	#.set	\name,\%s\ctr# BAD
+	#.set	\name,"%s\ctr"# BAD
+	#.set	\name,S(\ctr)	# BAD
+.endm
+.macro TMP_REG_NAME3 name,reg,ctr
+	.set \name,\reg\ctr
+.endm
+.macro next_tmp, name="last_tmp"
 	.set	TMP_CTR, TMP_CTR+1
 	.ifge	TMP_CTR - 43
 	.set	TMP_CTR, 40
 	.endif
+	.set	name,%
 .endm
 	.eqv	RTMP, TMP_REG
 
 .text
 .align 16
+.globl foo_bar
 foo_bar:
-	and	RTMP,0,(1)0
-	next_tmp
-	TMP_REG_SET	(TMP_CTR)
-	and	RTMP,0,(1)0
+	TMP_REG_NAME fu1,40
+	adds.l %s0,fu1,(0)1
+
+	TMP_REG_NAME fu2,"%s40"
+
+	#TMP_REG_NAME3 fu2,"%s",40
+	#adds.l %s0,fu2,%s0
+
+	adds.l	%s0,%s40,%s0
+	#SCALAR_REG %40
+	.set	TMP_REG,s40
+	adds.l	%s0,%TMP_REG,%s0
+
+	.set FUFU0,"hello" # OK
+	.set FUFU1,hello #OK
+	# Bad expression .set FUFU3,%s40
+	#adds.l %s40,%s40,%s40
+	#adds.l FUFU3,FUFU3,FUFU3
+	#TMP_REG_SET TMP_CTR
+	#and	RTMP,0,(1)0
+	#next_tmp
+	#TMP_REG_SET	(TMP_CTR)
+	#and	RTMP,0,(1)0
 #endif
-#if 0 /* test code ... */
+#if 1 /* test code ... */
 foo_bar:
-	ASMDBG(prt_str		"Hello ")
-	ASMDBG(prt_str		"World\n")
+	prt_str		"Hello "
+	prt_str		"World\n"
 	swap_reg %s0,%s1
 	swap_reg %s0,%s1
 #endif
@@ -352,7 +425,7 @@ sysv_inv2:				/* CALL "fn" */
 	;#lea	%sp,...
 	/* call fn (was in %s6, now in %s24) */
 	or	%s12,%s24,(0)1
-        bsic	%lr,(,%s12)	# retval (if rvalue!=NULL) is in %s0 (I think)
+	bsic	%lr,(,%s12)		# retval (if rvalue!=NULL) is in %s0
 	st	%s0,-4*8(,%fp)	# spill retval [which couldl be up to 4 registers long]
 	st	%s1,-3*8(,%fp)
 	st	%s2,-2*8(,%fp)
