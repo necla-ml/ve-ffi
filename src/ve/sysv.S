@@ -149,8 +149,8 @@ Lprt_str\@:	.asciz	"\STRING"
 		to switch to m4 */
 	.set	TMP_CTR, 40
 .altmacro
-.macro SCALAR_REG n
-	.set	REG,%s\n
+.macro SCALAR_REG N
+	.set	REG,%s\N
 .endm
 .noaltmacro
 .macro TMP_REG_SET CTR
@@ -238,7 +238,7 @@ foo_bar:
 	#TMP_REG_SET	(TMP_CTR)
 	#and	RTMP,0,(1)0
 #endif
-#if 1 /* test code ... */
+#if 0 /* test code ... */
 foo_bar:
 	prt_str		"Hello "
 	prt_str		"World\n"

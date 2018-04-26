@@ -1,8 +1,12 @@
 #PREFIX=`pwd`/install
 OPTS='-g2 -O1 -fPIC'
 OPTS='-g2 -O1'
+#
+# Max Debug:
+#     1. enable following section, and
+#     2. also [for nas] set VE_SYSV_DEBUG 1 in src/ve/ffitarget.h
+#
 if [ 0 -eq 1 ]; then
-	# max tracing/debug
 	OPTS="${OPTS} -DVE_DEBUG_LEVEL=5 -DVE_SYSV_DEBUG=1"
 fi
 BUILDDIR=build

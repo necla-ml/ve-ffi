@@ -161,7 +161,7 @@ static char const* ffi_avalue_str( ffi_type const* const t, void* avalue ){
     switch(t->type){
         case( FFI_TYPE_VOID       ): DPRINT("void"); break;
         case( FFI_TYPE_INT        ): DPRINT("%lu",*(int*)avalue); break;
-        case( FFI_TYPE_FLOAT      ): DPRINT("%f",*(((float*)avalue) + 1)); break; /* NB */
+        case( FFI_TYPE_FLOAT      ): DPRINT("%f",*(((float*)avalue) /*+ 1*/)); break; /* NB */
         case( FFI_TYPE_DOUBLE     ): DPRINT("%f",*(double*)avalue); break;
         case( FFI_TYPE_LONGDOUBLE ): DPRINT("%f",(double)*(long double*)avalue); break; /* Hmm. %Lf did not work properly */
         case( FFI_TYPE_UINT8      ): DPRINT("%lu",(long unsigned) *(UINT8*)avalue); break;
@@ -198,6 +198,38 @@ static char const* ffi_avalue_str( ffi_type const* const t, void* avalue ){
         default: DPRINT("?%p",avalue); break;
     }
     return &buf_avalue[0];
+}
+static inline void* plus_bytes(void* ptr, int bytes){
+    return (uint8_t*)ptr + bytes;
+}
+/* long double align 16 is only exception to normal stack alignment
+ * of 8.  zerofill is for debug compile/gdb (may not happen) */
+static void* align16_zerofill (void *stkarg){
+    if(0){
+        debug(4,"-Z");
+        // align_up: (value+align-1) & ~(align-1)
+        stkarg = (void*)((((UINT64)stkarg) + 15UL) & ~0x0fUL);
+    }else{ // longer version...
+        if( ((UINT64)stkarg) & 0x0fUL ){
+            debug(4,"-");
+            FFI_ASSERT( ((UINT64)stkarg & 0x07UL) == 0UL );
+            while( (UINT64)stkarg & 0x0fUL ){
+                debug(4,"Z");
+                *(UINT64*)stkarg = 0UL; // for gdb
+                stkarg += 8;
+            }
+        }
+    }
+    return stkarg;
+}
+/** Usually register values are stored at same base address as \c regvalue,
+ * but 'float' values when expanded to 8-byte register length are stored
+ * in the 4 "MSB" bytes, which are 4 bytes after \c regvalue.
+ *
+ * Aurora int types are stored "at" \c regvalue (ie "LSB" part of 8-byte reg)
+ */
+static char const* ffi_regvalue_str( ffi_type const* const t, void* regvalue ){
+    ffi_avalue_str (t, plus_bytes(regvalue, (t->type==FFI_TYPE_FLOAT? 4: 0)));
 }
 
 static char buf_avalues[1024];
@@ -470,385 +502,377 @@ void ffi_prep_args(char *stack, extended_cif* ecif)
         z = (*p_arg)->size;
         align = (*p_arg)->alignment;
 
-        /*if (z <= sizeof (UINT64) || type == FFI_TYPE_STRUCT)*/
-        if(1) /* all cases... */
-        {
-            /* these types are passed as single-register (if possible) */
-            union uarg_t {
-                UINT64 r1;
-                UINT64 u[4];
-                float f[4];
-                double d;
-                double d2[2];
-                long double ld;
-                long double ld2[2];
+        /* these types are passed as single-register (if possible) */
+        union uarg_t {
+            UINT64 r1;
+            UINT64 u[4];
+            float f[4];
+            double d;
+            double d2[2];
+            long double ld;
+            long double ld2[2];
 #if FFI_TARGET_HAS_COMPLEX_TYPE
-                float complex fq;
-                double complex q;
-                long double complex ldq;
+            float complex fq;
+            double complex q;
+            long double complex ldq;
 #endif
-            } val;
-            val.r1 = 0UL;   /* for gdb debug */
-            val.u[1] = 0UL;
-            val.u[2] = 0UL;
-            val.u[3] = 0UL;
+        } val;
+        val.r1 = 0UL;   /* for gdb debug */
+        val.u[1] = 0UL;
+        val.u[2] = 0UL;
+        val.u[3] = 0UL;
 
-            switch (type)
-            {
+        switch (type)
+        {
 
-                case FFI_TYPE_SINT8:
-                    *(SINT64*) &val.r1 = (SINT64) *(SINT8 *)(*p_argv);
-                    break;
+            case FFI_TYPE_SINT8:
+                *(SINT64*) &val.r1 = (SINT64) *(SINT8 *)(*p_argv);
+                break;
 
-                case FFI_TYPE_UINT8:
-                    *(UINT64 *) &val.r1 = (UINT64) *(UINT8 *)(*p_argv);
-                    break;
+            case FFI_TYPE_UINT8:
+                *(UINT64 *) &val.r1 = (UINT64) *(UINT8 *)(*p_argv);
+                break;
 
-                case FFI_TYPE_SINT16:
-                    *(SINT64 *) &val.r1 = (SINT64) *(SINT16 *)(*p_argv);
-                    break;
+            case FFI_TYPE_SINT16:
+                *(SINT64 *) &val.r1 = (SINT64) *(SINT16 *)(*p_argv);
+                break;
 
-                case FFI_TYPE_UINT16:
-                    *(UINT64 *) &val.r1 = (UINT64) *(UINT16 *)(*p_argv);
-                    break;
+            case FFI_TYPE_UINT16:
+                *(UINT64 *) &val.r1 = (UINT64) *(UINT16 *)(*p_argv);
+                break;
 
-                case FFI_TYPE_INT:
-                case FFI_TYPE_SINT32:
-                    *(SINT64*) &val.r1 = (SINT64) *(SINT32 *)(*p_argv);
-                    break;
+            case FFI_TYPE_INT:
+            case FFI_TYPE_SINT32:
+                *(SINT64*) &val.r1 = (SINT64) *(SINT32 *)(*p_argv);
+                break;
 
-                case FFI_TYPE_UINT32:
-                    *(UINT64*) &val.r1 = (UINT64) *(UINT32 *)(*p_argv);
-                    break;
+            case FFI_TYPE_UINT32:
+                *(UINT64*) &val.r1 = (UINT64) *(UINT32 *)(*p_argv);
+                break;
 
-                case FFI_TYPE_SINT64:
-                    *(SINT64*) &val.r1 = *(SINT64 *)(*p_argv);
-                    break;
+            case FFI_TYPE_SINT64:
+                *(SINT64*) &val.r1 = *(SINT64 *)(*p_argv);
+                break;
 
-                case FFI_TYPE_UINT64:
-                    *(UINT64*) &val.r1 = *(UINT64 *)(*p_argv);
-                    break;
+            case FFI_TYPE_UINT64:
+                *(UINT64*) &val.r1 = *(UINT64 *)(*p_argv);
+                break;
 
-                case FFI_TYPE_FLOAT:
-                    val.r1   = 0UL; /* [OPT] zero the other half-register */
-                    val.f[1] = *(float*)(*p_argv);
-                    break;
+            case FFI_TYPE_FLOAT:
+                val.r1   = 0UL; /* [OPT] zero the other half-register */
+                val.f[1] = *(float*)(*p_argv);
+                break;
 
-                case FFI_TYPE_DOUBLE:
-                    val.d = *(double *)(*p_argv);
-                    break;
+            case FFI_TYPE_DOUBLE:
+                val.d = *(double *)(*p_argv);
+                break;
 
 #if 1 /* !defined(FFI_NO_STRUCTS) */
-                case FFI_TYPE_STRUCT:
-                    FFI_ASSERT( type == FFI_TYPE_STRUCT ); /* VE has no special small-struct handling */
-                    FFI_ASSERT( cls == VE_REFERENCE );
-                    /* Let's hope that the struct MEMORY content has already been set up, and all we
-                       need to do is the pointer-pushing DIRECTLY TO THE avalues[] pointer */
-                    debug(5,"\nSTRUCT-arg pointer: *p_argv=%p ", *(void**)p_argv);
-                    *(SINT64*) &val.r1 = (SINT64) *(void**)p_argv;
-                    debug(5," *0x%lx = %d ", (unsigned long)val.r1, *(SINT32*)(void*)val.r1);
-                    break;
+            case FFI_TYPE_STRUCT:
+                FFI_ASSERT( type == FFI_TYPE_STRUCT ); /* VE has no special small-struct handling */
+                FFI_ASSERT( cls == VE_REFERENCE );
+                /* Let's hope that the struct MEMORY content has already been set up, and all we
+                   need to do is the pointer-pushing DIRECTLY TO THE avalues[] pointer */
+                debug(5,"\nSTRUCT-arg pointer: *p_argv=%p ", *(void**)p_argv);
+                *(SINT64*) &val.r1 = (SINT64) *(void**)p_argv;
+                debug(5," *0x%lx = %d ", (unsigned long)val.r1, *(SINT32*)(void*)val.r1);
+                break;
 #endif
-                case FFI_TYPE_POINTER:
-                    debug(5," *p_argv=%p ", *(void**)p_argv);
+            case FFI_TYPE_POINTER:
+                debug(5," *p_argv=%p ", *(void**)p_argv);
 #if VE_POINTER_BY_VALUE /* easier, but nonstandard according to libffi testsuite? */
-                    *(SINT64*) &val.r1 = (SINT64) *(void**)p_argv;
+                *(SINT64*) &val.r1 = (SINT64) *(void**)p_argv;
 #else
-                    *(SINT64*) &val.r1 = (SINT64) **(void***)p_argv;
+                *(SINT64*) &val.r1 = (SINT64) **(void***)p_argv;
 #endif
-                    debug(5," ptr 0x%lx ", (unsigned long)val.r1);
-                    break;
-                case FFI_TYPE_LONGDOUBLE:
-                    *(long double*)&val.ld = *(long double*)(*p_argv);
-                    break;
-                case FFI_TYPE_COMPLEX:
-                    /*
-                     *
-                     * NOTE
-                     *
-                     *   The memory order can't be tested until ncc-1.0.8 bugs
-                     *   are fixed, but old ABI docs suggest:
-                     *
-                     *   Register order: upper [lower] real, then upper [lower] imag
-                     *                   %s0, %s1, ...
-                     *
-                     *   Memory order:   upper ~ higher address
-                     *
-                     *   For long double complex,
-                     *      Register: %s0 %s1  %s2 %s3  would be stored in
-                     *      Memory:   %s1 %s0  %s3 %s2
-                     *                --real-- --imag--
-                     *      with alignment 16 / begin in even-numbered register
-                     *
-                     */
-                    if( z == 8 ){ /* z==8 (align==4) : float complex */
-                        {
-                            float re = ((float*)*p_argv)[0];
-                            float im = ((float*)*p_argv)[1];
-                            debug(4,"z8(%f,%f) ",(double)re,(double)im);
-                        }
-                        val.u[0] = 0UL;
-                        val.u[1] = 0UL;
-                        val.f[1] = *  (float*)(*p_argv);      /* real */
-                        val.f[3] = * ((float*)(*p_argv) + 1); /* imag */
-                        debug(5," re:%f im:%f",(double)val.f[1],(double)val.f[3]);
-                    }else if( z == 16 ){ /* z==16 (align==8) : double complex */
-                        {
-                            double re = *( ((double*)*p_argv) + 0);
-                            double im = *( ((double*)*p_argv) + 1);
-                            debug(4,"(%f,%f) ",(double)re,(double)im);
-                        }
-                        val.d2[0] = * ((double*)(*p_argv) + 0); /* real */
-                        val.d2[1] = * ((double*)(*p_argv) + 1); /* imag */
-                    }else if( z == 32 ){ /* z==32 (align==16) : long double complex */
-                        {
-                            long double re = *( ((long double*)*p_argv) + 0);
-                            long double im = *( ((long double*)*p_argv) + 1);
-                            debug(4,"ldq(%f,%f) ",(double)re,(double)im);
-                        }
-                        val.ld2[0] = * ((long double*)(*p_argv) + 0); /* real */
-                        val.ld2[1] = * ((long double*)(*p_argv) + 1); /* imag */
-                    }else{
-                        FFI_ASSERT("\n\tprep_args FFI_TYPE_COMPLEX TBD" == NULL);
+                debug(5," ptr 0x%lx ", (unsigned long)val.r1);
+                break;
+            case FFI_TYPE_LONGDOUBLE:
+                *(long double*)&val.ld = *(long double*)(*p_argv);
+                break;
+            case FFI_TYPE_COMPLEX:
+                /*
+                 *
+                 * NOTE
+                 *
+                 *   The memory order can't be tested until ncc-1.0.8 bugs
+                 *   are fixed, but old ABI docs suggest:
+                 *
+                 *   Register order: upper [lower] real, then upper [lower] imag
+                 *                   %s0, %s1, ...
+                 *
+                 *   Memory order:   upper ~ higher address
+                 *
+                 *   For long double complex,
+                 *      Register: %s0 %s1  %s2 %s3  would be stored in
+                 *      Memory:   %s1 %s0  %s3 %s2
+                 *                --real-- --imag--
+                 *      with alignment 16 / begin in even-numbered register
+                 *
+                 */
+                if( z == 8 ){ /* z==8 (align==4) : float complex */
+                    {
+                        float re = ((float*)*p_argv)[0];
+                        float im = ((float*)*p_argv)[1];
+                        debug(4,"z8(%f,%f) ",(double)re,(double)im);
                     }
-                    break;
+                    val.u[0] = 0UL;
+                    val.u[1] = 0UL;
+                    val.f[1] = *  (float*)(*p_argv);      /* real */
+                    val.f[3] = * ((float*)(*p_argv) + 1); /* imag */
+                    debug(5," re:%f im:%f",(double)val.f[1],(double)val.f[3]);
+                }else if( z == 16 ){ /* z==16 (align==8) : double complex */
+                    {
+                        double re = *( ((double*)*p_argv) + 0);
+                        double im = *( ((double*)*p_argv) + 1);
+                        debug(4,"(%f,%f) ",(double)re,(double)im);
+                    }
+                    val.d2[0] = * ((double*)(*p_argv) + 0); /* real */
+                    val.d2[1] = * ((double*)(*p_argv) + 1); /* imag */
+                }else if( z == 32 ){ /* z==32 (align==16) : long double complex */
+                    {
+                        long double re = *( ((long double*)*p_argv) + 0);
+                        long double im = *( ((long double*)*p_argv) + 1);
+                        debug(4,"ldq(%f,%f) ",(double)re,(double)im);
+                    }
+                    val.ld2[0] = * ((long double*)(*p_argv) + 0); /* real */
+                    val.ld2[1] = * ((long double*)(*p_argv) + 1); /* imag */
+                }else{
+                    FFI_ASSERT("\n\tprep_args FFI_TYPE_COMPLEX TBD" == NULL);
+                }
+                break;
 
-                default:
-                    FFI_ASSERT("unhandled small type in ffi_prep_args" == NULL);
-            }
-            debug(4, " i%uri%xz%u ",(unsigned)i,(unsigned)reginfo,(unsigned)z);
-            if(0){ ;
-            }else if(type==FFI_TYPE_COMPLEX && z==16){ /* z==8,16,32 to distinguish 3 cases */
-                FFI_ASSERT( align <= 8 );
-                /* float/double complex do not need to skip registers (align<=8) */
-                double re,im;
-                re = *( ((double*)*p_argv) + 0);
-                im = *( ((double*)*p_argv) + 1);
-                debug(4,"%016lx|%016lx ", (unsigned long)val.u[0], (unsigned long)val.u[1]);
-                debug(4,"(%f,%f) ",re,im);
-                char const* part[2]={"re","im"};
-                for(int p=0; p<2; ++p){
-                    if( reginfo == i ){
-                        /* register area set %s0..7 from low to high addr */
-                        debug(4," %s%%s%u",part[p],(unsigned)regn);
-                        *(UINT64*)stkreg = val.u[p]; /* p=0,1 for real,imag */
-                        debug(4, "@%p->dq:%s=%g",(void*)stkreg, part[p], *(double*)stkreg);
-                        //FFI_ASSERT( reginfo == i );
-                        // no longer true if can split real/imag across %s7 !!!
-                        *(UINT64*)stkarg = 0UL; /* for gdb */
-                        STKREG_NEXT;
-                    }else{
-                        *(UINT64*)stkarg = val.u[p]; /* p=0,1 for real,imag */
-                        debug(4, " M@%p->dq:%s=%g",(void*)stkarg, part[p], *((double*)stkarg));
-                    }
-                    stkarg+=8;
-                }
-            }else if(type==FFI_TYPE_COMPLEX && z==8){ /* z==8,16,32 to distinguish 3 cases */
-                FFI_ASSERT( align <= 8 );
-                /* float/double complex do not need to skip registers (align<=8) */
-                float re,im;
-                re = *( ((float*)*p_argv) + 0);
-                im = *( ((float*)*p_argv) + 1);
-                debug(4,"%016lx|%016lx ", (unsigned long)val.u[0], (unsigned long)val.u[1]);
-                debug(4,"(%f,%f) ",re,im);
-                char const* part[2]={"re","im"};
-                for(int p=0; p<2; ++p){
-                    if( reginfo == i ){
-                        /* register area set %s0..7 from low to high addr */
-                        debug(4," %s%%s%u",part[p],(unsigned)regn);
-                        *(UINT64*)stkreg = val.u[p]; /* p=0,1 for real,imag */
-                        debug(4, "@%p->dq:%s=%g",(void*)stkreg, part[p], (double)*(float*)stkreg);
-                        //FFI_ASSERT( reginfo == i );
-                        // no longer true if can split real/imag across %s7 !!!
-                        *(UINT64*)stkarg = 0UL; /* for gdb */
-                        STKREG_NEXT;
-                    }else{
-                        *(UINT64*)stkarg = val.u[p]; /* p=0,1 for real,imag */
-                        debug(4, " M@%p->dq:%s=%g",(void*)stkarg, part[p], (double)*((float*)stkarg));
-                    }
-                    stkarg+=8;
-                }
-            }else if(type==FFI_TYPE_COMPLEX && z==32){ /* long double complex */
-                FFI_ASSERT( align == 16 );
-                long double re,im;
-                re = *( ((long double*)*p_argv) + 0);
-                im = *( ((long double*)*p_argv) + 1);
-                debug(4,"%016lx|%016lx ", (unsigned long)val.u[0], (unsigned long)val.u[1]);
-                debug(4,"(%f,%f) ",(double)re,(double)im);
-                char const* part[2]={"re","im"};
-                for(int p=0; p<2; ++p){
-                    if( reginfo == i ){
-                        /* register area set %s0..7 from low to high addr */
-                        debug(4," %s%%s%u%%s%u",part[p],(unsigned)regn,(unsigned)(regn+1));
-                        char *pmem = stkreg;
-                        /* Q: is there an endian issue for long double mem <--> reg? */
-                        /* A: YES --> these look like they are in wrong order :) */
-                        *(UINT64*)stkreg = val.u[2*p+1]; /* p=0,1 for real,imag */
-                        STKREG_NEXT;
-                        FFI_ASSERT( reginfo == i ); /* can't split a long double (GUESS) */
-                        *(UINT64*)stkreg = val.u[2*p+0]; /* p=0,1 for real,imag */
-                        STKREG_NEXT;
-                        debug(4, "@%p->dq:%s=%g",(void*)pmem, part[p], (double)*(long double*)pmem);
-                        //FFI_ASSERT( reginfo == i );
-                        // no longer true if can split real/imag across %s7 !!!
-#if 1
-                        debug(4, " M@%p->0",(void*)stkarg, part[p]);
-                        *(UINT64*)stkarg = 0UL; /* for gdb */
-                        stkarg += 8;
-                        *(UINT64*)stkarg = 0UL; /* for gdb */
-                        stkarg += 8;
-#else
-                        /* it SHOULD be a register arg, but ... */
-                        pmem = stkarg;
-                        *(UINT64*)stkarg = val.u[2*p+0]; /* abi broken? */
-                        stkarg += 8;
-                        *(UINT64*)stkarg = val.u[2*p+1]; /* abi broken? */
-                        stkarg += 8;
-                        debug(4, "M@%p->dq:%s=%g",(void*)pmem, part[p], (double)*(long double*)pmem);
-#endif
-                    }else{
-                        char *pmem = stkreg;
-                        *(UINT64*)stkarg = val.u[2*p+0]; /* p=0,1 for real,imag */
-                        stkarg += 8;
-                        *(UINT64*)stkarg = val.u[2*p+1]; /* p=0,1 for real,imag */
-                        stkarg += 8;
-                        debug(4, " M@%p->dq:%s=%g",(void*)pmem, part[p], (double)*((long double*)pmem));
-                    }
-                }
-#if 0
-                FFI_ASSERT( z== 32 );
-                double re = *( ((long double*)*p_argv) + 0);
-                double im = *( ((long double*)*p_argv) + 1);
-                debug(4,"%016lx|%016lx ", (unsigned long)val.u[0], (unsigned long)val.u[1]);
-                debug(4,"ldqPush(%f,%f) ",re,im);
+            default:
+                FFI_ASSERT("unhandled small type in ffi_prep_args" == NULL);
+        }
+        debug(4, " i%uri%xz%u ",(unsigned)i,(unsigned)reginfo,(unsigned)z);
+        if(0){ ;
+        }else if(type==FFI_TYPE_COMPLEX && z==16){ /* z==8,16,32 to distinguish 3 cases */
+            FFI_ASSERT( align <= 8 );
+            /* float/double complex do not need to skip registers (align<=8) */
+            double re,im;
+            re = *( ((double*)*p_argv) + 0);
+            im = *( ((double*)*p_argv) + 1);
+            debug(4,"%016lx|%016lx ", (unsigned long)val.u[0], (unsigned long)val.u[1]);
+            debug(4,"(%f,%f) ",re,im);
+            char const* part[2]={"re","im"};
+            for(int p=0; p<2; ++p){
                 if( reginfo == i ){
-                    /*
-                       TODO: long double complex is probably also somehow allowed to
-                       split across register/both boundary (because double complex does)
-                    */
                     /* register area set %s0..7 from low to high addr */
-                    debug(4," re%%s%u%%s%u|im%%s%u%%s%u ",(unsigned)regn,(unsigned)(regn+1),
-                                (unsigned)(regn+2), (unsigned)(regn+3));
-#if 0
-                    *(UINT64*)stkreg = val.u[1]; /* lower reg# ~ real */
+                    debug(4," %s%%s%u",part[p],(unsigned)regn);
+                    *(UINT64*)stkreg = val.u[p]; /* p=0,1 for real,imag */
+                    debug(4, "@%p->dq:%s=%g",(void*)stkreg, part[p], *(double*)stkreg);
+                    //FFI_ASSERT( reginfo == i );
+                    // no longer true if can split real/imag across %s7 !!!
+                    *(UINT64*)stkarg = 0UL; /* for gdb */
                     STKREG_NEXT;
-                    FFI_ASSERT( reginfo == i );
-                    *(UINT64*)stkreg = val.u[0];
+                }else{
+                    *(UINT64*)stkarg = val.u[p]; /* p=0,1 for real,imag */
+                    debug(4, " M@%p->dq:%s=%g",(void*)stkarg, part[p], *((double*)stkarg));
+                }
+                stkarg+=8;
+            }
+        }else if(type==FFI_TYPE_COMPLEX && z==8){ /* z==8,16,32 to distinguish 3 cases */
+            FFI_ASSERT( align <= 8 );
+            /* float/double complex do not need to skip registers (align<=8) */
+            float re,im;
+            re = *( ((float*)*p_argv) + 0);
+            im = *( ((float*)*p_argv) + 1);
+            debug(4,"%016lx|%016lx ", (unsigned long)val.u[0], (unsigned long)val.u[1]);
+            debug(4,"(%f,%f) ",re,im);
+            char const* part[2]={"re","im"};
+            for(int p=0; p<2; ++p){
+                if( reginfo == i ){
+                    /* register area set %s0..7 from low to high addr */
+                    debug(4," %s%%s%u",part[p],(unsigned)regn);
+                    *(UINT64*)stkreg = val.u[p]; /* p=0,1 for real,imag */
+                    debug(4, "@%p->dq:%s=%g",(void*)stkreg, part[p], (double)*(float*)stkreg);
+                    //FFI_ASSERT( reginfo == i );
+                    // no longer true if can split real/imag across %s7 !!!
+                    *(UINT64*)stkarg = 0UL; /* for gdb */
                     STKREG_NEXT;
-                    FFI_ASSERT( reginfo == i );
-                    *(UINT64*)stkreg = val.u[3];
+                }else{
+                    *(UINT64*)stkarg = val.u[p]; /* p=0,1 for real,imag */
+                    debug(4, " M@%p->dq:%s=%g",(void*)stkarg, part[p], (double)*((float*)stkarg));
+                }
+                stkarg+=8;
+            }
+        }else if(type==FFI_TYPE_COMPLEX && z==32){ /* long double complex */
+            FFI_ASSERT( align == 16 );
+            long double re,im;
+            re = *( ((long double*)*p_argv) + 0);
+            im = *( ((long double*)*p_argv) + 1);
+            debug(4,"%016lx|%016lx ", (unsigned long)val.u[0], (unsigned long)val.u[1]);
+            debug(4,"(%f,%f) ",(double)re,(double)im);
+            char const* part[2]={"re","im"};
+            for(int p=0; p<2; ++p){
+                if( reginfo == i ){
+                    /* register area set %s0..7 from low to high addr */
+                    debug(4," %s%%s%u%%s%u",part[p],(unsigned)regn,(unsigned)(regn+1));
+                    char *pmem = stkreg;
+                    /* Q: is there an endian issue for long double mem <--> reg? */
+                    /* A: YES --> these look like they are in wrong order :) */
+                    *(UINT64*)stkreg = val.u[2*p+1]; /* p=0,1 for real,imag */
                     STKREG_NEXT;
-                    FFI_ASSERT( reginfo == i );
-                    *(UINT64*)stkreg = val.u[2];
+                    FFI_ASSERT( reginfo == i ); /* can't split a long double (GUESS) */
+                    *(UINT64*)stkreg = val.u[2*p+0]; /* p=0,1 for real,imag */
                     STKREG_NEXT;
+                    debug(4, "@%p->dq:%s=%g",(void*)pmem, part[p], (double)*(long double*)pmem);
+                    //FFI_ASSERT( reginfo == i );
+                    // no longer true if can split real/imag across %s7 !!!
+#if 1
+                    stkarg = align16_zerofill(stkarg);
+                    debug(4, " M@%p->0",(void*)stkarg, part[p]);
+                    *(UINT64*)stkarg = 0UL; /* for gdb */
+                    stkarg += 8;
+                    *(UINT64*)stkarg = 0UL; /* for gdb */
+                    stkarg += 8;
 #else
+                    /* it SHOULD be a register arg, but ... */
+                    pmem = stkarg;
+                    *(UINT64*)stkarg = val.u[2*p+0]; /* abi broken? */
+                    stkarg += 8;
+                    *(UINT64*)stkarg = val.u[2*p+1]; /* abi broken? */
+                    stkarg += 8;
+                    debug(4, "M@%p->dq:%s=%g",(void*)pmem, part[p], (double)*(long double*)pmem);
+#endif
+                }else{
+                    debug(4," stkarg");
+                    FFI_ASSERT(align == 16);    /* long double foo is only type with align 16 */
+                    stkarg = align16_zerofill(stkarg);
+                    // long double version:
+                    //*(long double*)stkarg = val.ld;
+                    //*(UINT64*)stkarg = val.u[1];
+                    //*((UINT64*)stkarg+1) = val.u[0];
+                    //debug(4, "@%p->ld:%g ",(void*)stkarg,(double)*(long double*)stkarg);
+                    // Here:
+                    char *pmem = stkarg;
+                    *(UINT64*)stkarg = val.u[2*p+0]; /* p=0,1 for real,imag */
+                    stkarg += 8;
+                    *(UINT64*)stkarg = val.u[2*p+1]; /* p=0,1 for real,imag */
+                    stkarg += 8;
+                    debug(4, " M@%p->dq:%s=%g",(void*)pmem, part[p], (double)*((long double*)pmem));
+                }
+            }
+#if 0
+            FFI_ASSERT( z== 32 );
+            double re = *( ((long double*)*p_argv) + 0);
+            double im = *( ((long double*)*p_argv) + 1);
+            debug(4,"%016lx|%016lx ", (unsigned long)val.u[0], (unsigned long)val.u[1]);
+            debug(4,"ldqPush(%f,%f) ",re,im);
+            if( reginfo == i ){
+                /*
+TODO: long double complex is probably also somehow allowed to
+split across register/both boundary (because double complex does)
+*/
+                /* register area set %s0..7 from low to high addr */
+                debug(4," re%%s%u%%s%u|im%%s%u%%s%u ",(unsigned)regn,(unsigned)(regn+1),
+                        (unsigned)(regn+2), (unsigned)(regn+3));
+#if 0
+                *(UINT64*)stkreg = val.u[1]; /* lower reg# ~ real */
+                STKREG_NEXT;
+                FFI_ASSERT( reginfo == i );
+                *(UINT64*)stkreg = val.u[0];
+                STKREG_NEXT;
+                FFI_ASSERT( reginfo == i );
+                *(UINT64*)stkreg = val.u[3];
+                STKREG_NEXT;
+                FFI_ASSERT( reginfo == i );
+                *(UINT64*)stkreg = val.u[2];
+                STKREG_NEXT;
+#else
+                *(long double*)stkreg = val.ld2[0];
+                debug(4, "@%p->fq:re=%g",(void*)stkreg, (double)((long double*)stkreg)[0]);
+                STKREG_NEXT;
+                STKREG_NEXT;
+                if( reginfo ==i ){ // allow split re/im ??
                     *(long double*)stkreg = val.ld2[0];
                     debug(4, "@%p->fq:re=%g",(void*)stkreg, (double)((long double*)stkreg)[0]);
                     STKREG_NEXT;
                     STKREG_NEXT;
-                    if( reginfo ==i ){ // allow split re/im ??
-                        *(long double*)stkreg = val.ld2[0];
-                        debug(4, "@%p->fq:re=%g",(void*)stkreg, (double)((long double*)stkreg)[0]);
-                        STKREG_NEXT;
-                        STKREG_NEXT;
-                    }
+                }
 #endif
-                }
-                if( reginfo != i /* || argklas == VE_BOTH */ ){
-                    FFI_ASSERT(align == 16);
-                    if( ((UINT64)stkarg) & 0x0fUL ){
-                        if(0){
-                            debug(4,"-Z");
-                            stkarg = (void*)((((UINT64)stkarg) + 15UL) & ~0x0fUL);
-                        }else{
-                            debug(4,"-");
-                            while( (UINT64)stkarg & 0x0fUL ){
-                                debug(4,"Z");
-                                *(UINT64*)stkarg = 0UL;
-                                stkarg += 8;
-                            }
-                        }
-                    }
-#if 1 /* 4x8-byte memcpy */
-                    *(UINT64*)stkarg = val.u[0];        /* real <--> LOWER reg# */
-                    *(UINT64*)(stkarg+8) = val.u[1];
-                    *(UINT64*)(stkarg+16) = val.u[2];
-                    *(UINT64*)(stkarg+24) = val.u[3];
-#else
-                    *(long double complex*)stkarg = val.ldq;
-#endif
-                    debug(4, "@%p->fq:%g+%g*I ",(void*)stkarg,
-                            (double)((long double*)stkarg)[0],
-                            (double)((long double*)stkarg)[1] );
-                }else{
-                    debug(4, "(stkarg-skip) ");
-                }
-                stkarg += 2*8;
-#endif
-            }else if( type == FFI_TYPE_LONGDOUBLE ){
-                debug(4,"%016lx|%016lx ", (unsigned long)val.u[0], (unsigned long)val.u[1]);
-                if( reginfo == i ){
-                    /* register area set %s0..7 from low to high addr */
-                    debug(4," %%s%u|%%s%u ",(unsigned)regn,(unsigned)(regn+1));
-                    *(UINT64*)stkreg = val.u[1]; /* lower reg ~ HIGHER mem addr */
-                    STKREG_NEXT;
-                    FFI_ASSERT( reginfo == i );
-                    *(UINT64*)stkreg = val.u[0];
-                    STKREG_NEXT;
-                }
-                if( reginfo != i /* || argklas == VE_BOTH */ ){
-                    FFI_ASSERT(align == 16);
-                    /* store in arg space ... mem to mem "normal" copy */
-                    /* BUT: may need to skip if alignment is high (like stkreg) */
-                    debug(4," stkarg");
-                    FFI_ASSERT( ((UINT64)stkarg & 0x07UL) == 0UL );
-                    /* *(UINT64*)stkarg &= ~0x07U; */
-                    if( ((UINT64)stkarg) & 0x0fUL ){
-                        if(0){
-                            debug(4,"-Z");
-                            stkarg = (void*)((((UINT64)stkarg) + 15UL) & ~0x0fUL);
-                        }else{
-                            debug(4,"-");
-                            while( (UINT64)stkarg & 0x0fUL ){
-                                debug(4,"Z");
-                                *(UINT64*)stkarg = 0UL;
-                                stkarg += 8;
-                            }
-                        }
-                    }
-                    *(long double*)stkarg = val.ld;
-                    //*(UINT64*)stkarg = val.u[1];
-                    //*((UINT64*)stkarg+1) = val.u[0];
-                    debug(4, "@%p->ld:%g ",(void*)stkarg,(double)*(long double*)stkarg);
-                }
-                stkarg += 2*8;
-            }else if(z <= 8 || type==FFI_TYPE_STRUCT){
-                FFI_ASSERT(align <= 16);
-                debug(4,"%016lx ", (unsigned long)val.u[0]);
-                if( reginfo == i ){ /* is this a register value? */
-                    *(UINT64*)stkreg = val.r1;
-                    //debug(3," r%lu", (long unsigned)val.r1);
-                    debug(4," r@%p=%s=%lx", (void*)stkreg, ffi_avalue_str(*p_arg,(void*)&val),
-                            (unsigned long)val.r1);
-                    STKREG_NEXT;
-                    //if( cls == VE_REGISTER )
-                    //    continue; /* ONLY in register */
-                    FFI_ASSERT( stkreg <= stkreg_end );
-                }
-                if( reginfo != i /* || argklas == VE_BOTH */ ){
-                    /* store in arg space ... */
-                    *(UINT64*)stkarg = val.r1;
-                    //debug(3," stk%lu", (unsigned long)val.r1);
-                    debug(4," stkarg@%p->%s=%s", (void*)stkarg,
-                            ffi_avalue_str(*p_arg,(void*)&val.r1),
-                            ffi_avalue_str(*p_arg,(void*)stkarg));
-                }
-                stkarg += 8;
-                FFI_ASSERT( stkarg <= stkreg_beg );
-            }else{
-                debug(4," UNHANDLED ARG TYPE \n");
-                FFI_ASSERT("Unhandled type" == NULL);
             }
+            if( reginfo != i /* || argklas == VE_BOTH */ ){
+                FFI_ASSERT(align == 16);
+                if( ((UINT64)stkarg) & 0x0fUL ){
+                    if(0){
+                        debug(4,"-Z");
+                        stkarg = (void*)((((UINT64)stkarg) + 15UL) & ~0x0fUL);
+                    }else{
+                        debug(4,"-");
+                        while( (UINT64)stkarg & 0x0fUL ){
+                            debug(4,"Z");
+                            *(UINT64*)stkarg = 0UL;
+                            stkarg += 8;
+                        }
+                    }
+                }
+#if 1 /* 4x8-byte memcpy */
+                *(UINT64*)stkarg = val.u[0];        /* real <--> LOWER reg# */
+                *(UINT64*)(stkarg+8) = val.u[1];
+                *(UINT64*)(stkarg+16) = val.u[2];
+                *(UINT64*)(stkarg+24) = val.u[3];
+#else
+                *(long double complex*)stkarg = val.ldq;
+#endif
+                debug(4, "@%p->fq:%g+%g*I ",(void*)stkarg,
+                        (double)((long double*)stkarg)[0],
+                        (double)((long double*)stkarg)[1] );
+            }else{
+                debug(4, "(stkarg-skip) ");
+            }
+            stkarg += 2*8;
+#endif
+        }else if( type == FFI_TYPE_LONGDOUBLE ){
+            debug(4,"%016lx|%016lx ", (unsigned long)val.u[0], (unsigned long)val.u[1]);
+            if( reginfo == i ){
+                /* register area set %s0..7 from low to high addr */
+                debug(4," %%s%u|%%s%u ",(unsigned)regn,(unsigned)(regn+1));
+                *(UINT64*)stkreg = val.u[1]; /* lower reg ~ HIGHER mem addr */
+                STKREG_NEXT;
+                FFI_ASSERT( reginfo == i );
+                *(UINT64*)stkreg = val.u[0];
+                STKREG_NEXT;
+            }
+            if( reginfo != i /* || argklas == VE_BOTH */ ){
+                FFI_ASSERT(align == 16);
+                /* store in arg space ... mem to mem "normal" copy */
+                /* BUT: may need to skip if alignment is high (like stkreg) */
+                debug(4," stkarg");
+                stkarg = align16_zerofill(stkarg);
+                *(long double*)stkarg = val.ld;
+                //*(UINT64*)stkarg = val.u[1];
+                //*((UINT64*)stkarg+1) = val.u[0];
+                debug(4, "@%p->ld:%g ",(void*)stkarg,(double)*(long double*)stkarg);
+            }
+            stkarg += 2*8;
+        }else if(z <= 8 || type==FFI_TYPE_STRUCT){
+            FFI_ASSERT(align <= 16);
+            debug(4,"%016lx ", (unsigned long)val.u[0]);
+            if( reginfo == i ){ /* is this a register value? */
+                *(UINT64*)stkreg = val.r1;
+                //debug(3," r%lu", (long unsigned)val.r1);
+                debug(4," r@%p=%s=%lx", (void*)stkreg, ffi_regvalue_str(*p_arg,(void*)&val),
+                        (unsigned long)val.r1);
+                STKREG_NEXT;
+                //if( cls == VE_REGISTER )
+                //    continue; /* ONLY in register */
+                FFI_ASSERT( stkreg <= stkreg_end );
+            }
+            if( reginfo != i /* || argklas == VE_BOTH */ ){
+                /* store in arg space ... */
+                *(UINT64*)stkarg = val.r1;
+                //debug(3," stk%lu", (unsigned long)val.r1);
+                debug(4," stkarg@%p->%s=%s", (void*)stkarg,
+                        ffi_regvalue_str(*p_arg,(void*)&val.r1),
+                        ffi_regvalue_str(*p_arg,(void*)stkarg));
+            }
+            stkarg += 8;
+            FFI_ASSERT( stkarg <= stkreg_beg );
+        }else{
+            debug(4," UNHANDLED ARG TYPE \n");
+            FFI_ASSERT("Unhandled type" == NULL);
         }
 #if 0
         {
@@ -974,7 +998,7 @@ ffi_status ffi_prep_cif_machdep(ffi_cif *cif)
                     }else{
                         for(int s=0; s<sk; ++s){
                             flags2 += 0xffLU<<(greg++*8);
-                            debug(3," q%s:%lx ++g%u","SKIP",flags2,(unsigned)greg);
+                            debug(3," [Q%u]%s:%lx ++g%u",size,"SKIP",flags2,(unsigned)greg);
                         }
                         n += greg;  /* end register# for this arg */
                         if( n > NGREGARG ) {
@@ -983,7 +1007,7 @@ ffi_status ffi_prep_cif_machdep(ffi_cif *cif)
                         }
                         do{
                             flags2 += (UINT64)i<<(greg++*8); /* this greg holds arg 'i' */
-                            debug(3,"q%s:%lx ++g%u","REG",flags2,(unsigned)greg);
+                            debug(3," [Q%u]%s:%lx ++g%u",size,"REG",flags2,(unsigned)greg);
                         }while( greg < n );
                     }
                     break;
@@ -1027,12 +1051,12 @@ ffi_status ffi_prep_cif_machdep(ffi_cif *cif)
                     }else if (greg + n > NGREGARG){ /* overflow, do not pass in reg */
                         for( ; greg<NGREGARG; ++greg ) flags2 += 0xffLU<<(greg*8); /* "skip" */
                         greg = NGREGARG;
-                        debug(3," [D]%s:%u","DONE",flags2,(unsigned)greg);
+                        debug(3," [D]%s:%lx++g%u","DONE",flags2,(unsigned)greg);
                     }else{
                         n += greg;  /* end register# for this arg */
                         do{
                             flags2 += (UINT64)i<<(greg++*8); /* this greg holds arg 'i' */
-                            debug(3," [D]%s:%u","REG",flags2,(unsigned)greg);
+                            debug(3," [D]%s:%lx++g%u","REG",flags2,(unsigned)greg);
                         }while( greg < n );
                     }
 #if 0 && defined(FFI_EXTRA_CIF_FIELDS) /* this was for some other chip */
