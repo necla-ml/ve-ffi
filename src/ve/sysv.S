@@ -347,7 +347,7 @@ sysv_save:
 	or	%s23,%s5,(0)1	# rvalue
 	or	%s24,%s6,(0)1	# fn
 	SYSV_SET_DEBUG_REGS
-	
+
 	/* sysv.S only needs 4 8byte slots for temporaries, I think.
 	   and probably I can even put those into s18-s33 instead. */
 	.set neg_needed_stack_size, -1024 # ???
@@ -585,6 +585,355 @@ sysv_ret:
 .L_EoE: #end of epilogue
 	.cfi_endproc
 	.size	ffi_call_SYSV, . - ffi_call_SYSV
+/*
+# This is invoked via a "trampoline", which is a runtime
+# generated set of instructions.  The trampoline passes us
+# 1. trampoline address in %s0
+# 2. [if REFERENCE return] ptr to return content %s1
+# The trampoline executes a jump [branch] instruction
+# to ffi_closure_ve  [or ffi_closure_ve_struct]
+*/
+#define CLOSURE_FS 8 /*closure frame size*/
+/* adapting x86/ffi64.c
+ * closure is the WRITABLE address returned by ffi_closure_alloc
+ *   [ this is what we have to set up in this call ]
+ * fun( ffi_cif* cif, void *ret, void **args, void *user_data )
+ *   is the function called by the closure.
+ * user_data is passed, uninterpreted, to your closure function.
+ * codeloc is the READ+EXEC pointer to *closure -- unused here
+ *   [ user casts this to appropriate fn-call type ]
+ */
+/*
+ * Where do I store %lr  (closure return address)
+ *
+ * closure("Hi")
+ * ... Reg/Ref args [%s0<--"Hi",]
+ * ... %s12 <-- addr of trampoline
+ * ... bsic %lr,(,%s12)
+ * --> trampoline executes!
+ * _______________________________
+ *   --> ffi_closure_ve (sysv.S)
+ * operating IN CALLER STACK FRAME
+ * fp -------   alloca -----------
+ *    |          32 (rval)
+ *    |         +64 (reg_args)
+ *    |         +48 (*_inner parms)  |*_inner (ffi.c)
+ *    |         ---                  |( ffi_cif *cif,
+ *    |  alloca(144)                 |  void(*fun)(ffi_cif*,void*ret,
+ *    |                              |     void**args,void*user_data),
+ *    |                              |  void *user_data,
+ *    |                              |  void*rvalue,
+ *    |                              |  struct register_args *reg_args,
+ *    |                              |  char *argp );
+ *    |------------------------------|__________________
+ *    |%s0:"Hi"(mem unset)           |
+ * 176|--------+-- argp -------------| argp
+ *    |(RSA)    \   retaddr+flg[16]  | (for ffi_closure_ve)
+ *    |(retaddr) \  rvalue[32]       | rvalue
+ *   0|(calleefp) \ reg_args[64]     | reg_args
+ *  sp|--------    \_inner args[6*8] | %s0..%s5
+ *              176\------------------------------
+ *                 |(RSA)            | *_inner
+ *                 |(retaddr)        | prologue
+ *                0|(calleefp)       | sets these    | *_inner
+ *               sp|----------//   fp------------    | now invokes
+ *                                   | locals        | (*fun)     
+ *                                   |-----------    |_____________
+ *                                   | alloca Parm   | fun args &
+ *                                   | Area of 'fun' | regs set up
+ *                                   | args-->"Hi",  | by *_inner
+ *                                   | etc.          |
+ *                             sp+176|-----------    |-------------
+ *                                   |(RSA)          | fun prologue
+ *                                   |(retaddr,fp)   | sets these
+ *                                 sp|-----------  fp|-------------
+ *                              _________________    |
+ *                             /  Unwind: ret   |    | etc.
+ *                            /    rvalue? flags|  sp|-------------
+ *  _________________________/
+ *    Unwind: rvalue        
+ *            -> reg        
+ */
+/* Closure Frame: size and offsets
+ *   0. sp..sp+176 reserved [not yet set!] for fp, ret addr, and RSA
+ *      *_inner WILL push %fp,%lr,%got,%plt,etc onto stack during prologue
+ *   1. alloca for:
+ *      a. return addr (+ 8-byte align, so %sp has 16-byte alignment)
+ *      b. space for rvalue (4 * 8byte)
+ *      c. store all possible reg args of 'fun' (8 * 8byte)
+ *      d. space for %s0..%s5 args to *_inner (6 * 8byte)
+ *         [even for REGISTER args, uninitialized arg area is given]
+ *   We don't want the overhead of full stack frame creation.
+ *   ffi closure offsets are wrt our new %sp -= ffi_closure_ALLOCA
+ */
+#if 0 // nas does not lot like expressions very much
+#define ffi_closure_OFS_PARMS	176
+#define ffi_closure_OFS_G       (ffi_closure_OFS_PARMS + 6*8)
+#define ffi_closure_OFS_RVALUE  (ffi_closure_OFS_G + 8*8)
+#define ffi_closure_OFS_RETADDR (ffi_closure_OFS_RVALUE + 4*8)
+#define ffi_closure_OFS_ARGP    (ffi_closure_OFS_RET + 8 + 8/*flg*/)
+#define ffi_closure_ALLOCA      (ffi_closure_OFS_ARGP - ffi_closure_OFS_G)
+#else
+.set ffi_closure_OFS_PARMS   , 176
+.set ffi_closure_OFS_G       , (ffi_closure_OFS_PARMS + 6*8)
+.set ffi_closure_OFS_RVALUE  , (ffi_closure_OFS_G + 8*8)
+.set ffi_closure_OFS_RETADDR , (ffi_closure_OFS_RVALUE + 4*8)
+.set ffi_closure_OFS_ARGP    , (ffi_closure_OFS_RET + 8 + 8/*align*/)
+#.set ffi_closure_ALLOCA      , (ffi_closure_OFS_ARGP - ffi_closure_OFS_G)
+/* 48 + 64 + 32 + 8+8 = 160 bytes for alloca */
+#define ffi_closure_ALLOCA 160
+#endif
+
+/* -ve offset of rvalue within the red zone after deallocating the frame.  */
+#define ffi_closure_RED_RVALUE  (ffi_closure_OFS_RVALUE - ffi_closure_FS)
+
+.globl ffi_closure_ve_struct
+.globl ffi_closure_ve
+.balign 16
+ffi_closure_ve_struct:
+	or	%s60,1,(1)0
+	br.w	.L_ffi_closure_s60
+.balign 16
+ffi_closure_ve:
+	or	%s60,0,(1)0
+	# %s60 flags our entry-point
+.L_ffi_closure_s60:
+	/* We are still in the caller's stack-frame.
+	 * Parameter area for callee is at 176(%fp).
+	 * For Aurora this begins with space for REGISTER args.
+	 *
+	 * We are preparing to call a function of form
+	 * void (*fun)(ffi_cif*cif, void*ret, void**args, void*user_data),
+	 *
+	 * But first we need to invoke ffi_closure_ve_inner (ffi.c)
+	 * Where do we stash register args in the meantime?
+	 * We do something like alloca would do, and stash all possible
+	 * arg-registers for later use.
+	 * ffi_closure_unix64_inner(ffi_cif *cif,
+	 *		 void (*fun)(ffi_cif*, void*, void**, void*),
+	 *		 void *user_data,
+	 *		 void *rvalue,
+	 *		 struct register_args *reg_args,
+	 *		 char *argp)
+	 */
+.L_closure_alloca:
+	lea	%sp, -ffi_closure_ALLOCA(,%sp)		# as Data: sext(D,64)
+	brge.l.t	%sp,%sl,.L_closure_space	# s63 >= stack limit[long,taken]?
+	# readjust stack limit?
+	ld	%s61,0x18(,%tp)	# param area: Host Memory ptr
+	or	%s62,0,%s0	# spill value of %s0
+	lea	%s63,0x13b	# syscall "grow" 
+	shm.l	%s63,0x0(%s61)	# StoreHostMem addr:0
+	shm.l	%sl,0x8(%s61)	# old limit at addr:8
+	shm.l	%sp,0x10(%s61)	# new limit at addr:16
+	monc			# system function
+	or	%s0,0,%s62	# restore value of %s0
+	# ... CLOSURE_ALLOCA bytes below %sp are usable ...
+.L_closure_space:
+	/* stow final return addr (%lr), and entry point indicator (%s60)
+	 *    Trampoline does not touch caller's %lr return address ! */
+	st	%lr,  ffi_closure_OFS_RETADDR+0x00(,%sp)	/* caller's ret addr */
+	st	%s60, ffi_closure_OFS_RETADDR+0x08(,%sp)	/* 0/1: REFERENCE rvalue? */
+
+	/* OFS_PARMS: leave 6*8 mem space [uninitialized]
+	 * to mirror %s0..%s5 args that we'll pass to *_inner. */
+	/* General Register Save: reg_args will be 5th arg to *_inner */
+	/* We save all, and *_inner will sort out whatever register args
+	 * are actually useful (and where memory args actually begin) */
+	st	%s0,ffi_closure_OFS_G+0x00(,%sp)
+	st	%s1,ffi_closure_OFS_G+0x08(,%sp)
+	st	%s2,ffi_closure_OFS_G+0x10(,%sp)
+	st	%s3,ffi_closure_OFS_G+0x18(,%sp)
+	st	%s4,ffi_closure_OFS_G+0x20(,%sp)
+	st	%s5,ffi_closure_OFS_G+0x28(,%sp)
+	st	%s6,ffi_closure_OFS_G+0x30(,%sp)
+	st	%s7,ffi_closure_OFS_G+0x38(,%sp)
+	# OFS_RVALUE: 4*8 bytes reserved for possible rvalue
+
+	# now unpack the *_inner arguments:
+	/* Trampoline jumps into ffi_closure_ve with
+	 *     instruction (bsic    %s12, (,%s12),
+	 * so  %s12 = addr just after tramp[]
+	 *     (TRAMPOLINE_BYTES past the actual trampoline)
+	 * %s1 --> where cif, fun, and user_data are stored
+	 */
+	ld	%s0, 0(,%s12)				/* Load cif */
+	ld	%s1, 8(,%s12)				/* Load fun */
+	ld	%s2, 16(,%s12)				/* Load user_data */
+	/* we no longer need trampoline area */
+
+.L_do_closure:
+	lea	%s3, ffi_closure_OFS_RVALUE(,%sp)	/* Load rvalue (4 byte max) */
+	lea	%s4, ffi_closure_OFS_G(,%sp)		/* Load reg_args (64 bytes) */
+	lea	%s5, ffi_closure_OFS_ARGP(,%sp)		/* Load argp */
+
+
+	addr_s12 ffi_closure_inner
+	bsic	%lr,(,%s12)
+
+
+.L_closure_rvalue:
+	lea	%s4, ffi_closure_OFS_RVALUE(,%sp)	/* %s2: ptr-to-rvalue memory */
+	ld	%lr, ffi_closure_OFS_REGADDR(,%sp)	/* restore pre-trampoline return address */
+	st	%s5, ffi_closure_OFS_RETADDR+0x08(,%sp) /* 0/1: REFERENCE rvalue? */
+	breq.l.t	%s5,0,.L_closure_REGISTER
+.L_closure_REFERENCE:
+	# TODO
+
+.L_closure_REGISTER: # rvalue could be up to long double complex (4 registers)
+	ld	%s0, 0x00(,%s4)
+	ld	%s1, 0x08(,%s4)
+	ld	%s2, 0x10(,%s4)
+	ld	%s3, 0x18(,%s4)
+	# rvalue processing (return value ---> registers, maybe)
+	#   MAYBE bump up %sp early so we can "b.l (,%lr)"
+	#         instead of "br.w .L_closure_ret"
+
+.L_closure_ret:
+	# Bump up %sp again (remove our alloca space)
+	lea	%sp, ffi_closure_ALLOCA(,%sp)		/* remove alloca space */
+	# After this, we should not execute function calls.
+
+	b.l	(,%lr)
+	.size	ffi_closure_ve, . - ffi_closure_ve
+
+ffi_closure_vexx:
+	;#stack frame .cfi directives are for nice stack debug
+	/* [opt] libffi has macros for .cfi stuff */
+	.cfi_startproc
+	st	%fp,0x0(,%sp)
+	.cfi_def_cfa_offset 0
+	.cfi_offset	9,0		# %fp is %s9
+	st	%lr,0x8(,%sp)		# %lr~%s10 Link Reg: ret addr
+	;				# skip %tp at 0x10(,%sp)
+	#st	%got,0x18(,%sp)
+	#st	%plt,0x20(,%sp)
+	#lea	%got,_GLOBAL_OFFSET_TABLE_@PC_LO(-24) 	#-0x18
+	#and	%got,%got,(32)0
+	#sic	%plt			# %plt := IC + 8
+	#lea.sl	%got,_GLOBAL_OFFSET_TABLE_@PC_HI(%plt,%got)
+	or	%fp,0,%sp		# %fp := %sp
+	
+	#.cfi_def_cfa_register	9	# %s9 is the frame points
+	S18_TO_33( st, %fp )		# %s18-%s33 Callee-saved
+
+	# Save trampoline data into a stack frame
+	lea	%sp, -16(,%fp)
+	brge.l.t	%sp,%sl,.L_fEoP	# sp >= stack limit[long,taken]?
+	#
+	ld	%s61,0x18(,%tp)	# param area: Host Memory ptr
+	or	%s62,0,%s0	# spill value of %s0
+	lea	%s63,0x13b	# syscall "grow" 
+	shm.l	%s63,0x0(%s61)	# StoreHostMem addr:0
+	shm.l	%sl,0x8(%s61)	# old limit at addr:8
+	shm.l	%sp,0x10(%s61)	# new limit at addr:16
+	monc
+	or	%s0,0,%s62	# restore value of %s0
+	# ... 
+.L_fEoP: ;# end prologue
+	/* YOUR CODE HERE */
+.L_fBoE: ;# begin epilogue
+	#S18_TO_33( ld, %fp )	# Paranoia: %s18..33 belong to caller
+	;# Remove the space we pushed for the args
+	or	%sp,0,%fp	# callee stack frame -> Gone!
+	#.cfi_def_cfa	11,8
+	#ld	%got,0x18(,%sp)
+	#ld	%plt,0x20(,%sp)
+	#ld	%lr, 0x8(,%sp)
+	# ld	%fp, 0x0(,%sp)
+	b.l	(,%lr)
+.L_fEoE: #end of epilogue
+	.cfi_endproc
+
+.balign 16
+.globl ffi_example_tramp
+ffi_x86style_tramp:
+	sic	%s12
+	lea	%s0,-8(,%s12)	# %s0 = closure = tramp addr
+	lea	%s12,16(,%s12)  # %s12 = addr of asm fn
+        b.l	(,%s12)		# tramp[4]: branch to absolute addr
+	# *((UINT64*)tramp)[4] = addr of asm fn
+negative_eight:
+	.8byte -8
+	adds.l	%s0,0,(61)1
+ffi_x86style_tramp2:
+	sic	%s12
+	lea	%s0,-8(,%s12)	# %s0 = closure = tramp addr
+	lea	%s12,16(,%s12)  # %s12 = addr of asm fn
+        b.l	(,%s12)		# tramp[4]: branch to absolute addr
+	# *((UINT64*)tramp)[4] = addr of asm fn
+
+ffi_example_tramp_MINIMAL:			# vvvvvvvvvvv
+	lea	%s12, 0x33cc33dd		# dd 33 cc 33 00 00 0c 06
+	and	%s12,%s12,(32)0			# 00 00 00 00 60 8c 0c 44
+	lea.sl	%s12, 0x33aa33bb(,%s12)		# bb 33 aa 33 8c 00 8c 06
+						# ^^^^^^^^^^^ absolute fn addr
+	bsic	%s12,(,%s12)		# jmp, but with %s12 = tramp const data
+	# could have flags, etc. here by increasing TRAMPOLINE_SIZE
+	.8byte 0x4400440044004400 # <-- %s12 tramp[4] ffi_cit *cif
+	.8byte 0x5500550055005500 # tramp[5] void (*fun)(ffic_cif*,void*,void**,void*)
+	.8byte 0x6600660066006600 # tramp[6] void* user_data
+ffi_example_tramp_MINIMALxx:			# vvvvvvvvvvv
+	lea	%s12, 0x33cc33dd		# dd 33 cc 33 00 00 0c 06
+	and	%s12,%s12,(32)0			# 00 00 00 00 60 8c 0c 44
+	lea.sl	%s12, 0x33aa33bb(,%s12)		# bb 33 aa 33 8c 00 8c 06
+						# ^^^^^^^^^^^ absolute fn addr
+	bsic	%s0,(,%s12)		# jmp, but with %s0 = tramp const data
+	# oops, cannot really use %s0, because it might have function args!
+	.8byte 0x6600660066006600 # tramp[4] closure ptr
+	.8byte 0x7700770077007700 # tramp[5] [opt] struct return addr
+ffi_example_tramp_REGISTER:
+	sic %s12		  # tramp[0]: point s2 --> trampoline+8
+        lea %s0, 5*8-8(,%s12)	  # tramp[1]: load closure tramp[5] arg1 --> s0
+        lea %s12, 4*8-8(,%s12)    # tramp[2]: load tramp absolute addr (reuse %s12)
+        b.l (,%s12)		  # tramp[3]: branch to absolute addr
+	.8byte 0x4400440044004400 # tramp[4] addr of asm routine to jump to
+	.8byte 0x5500550055005500 # tramp[5] %s0 closure ptr
+	.8byte 0x0000000000000000 # tramp[6] unused
+	.8byte 0x0000000000000000 # tramp[7] unused
+ffi_example_tramp_REFERENCE:
+	sic %s12		  # tramp[0]: point s2 --> trampoline+8
+        lea %s0, 6*8-8(,%s12)	  # tramp[1]: load closure tramp[5] arg1 --> s0
+        lea %s1, 7*8-8(,%s12)	  # tramp[2]: load closure tramp[7] arg2 --> s1
+        lea %s12, 5*8-8(,%s12)    # tramp[3]: tramp[7] asm addr --> s12
+        b.l (,%s12)		  # tramp[4]: branch to asm addr
+	.8byte 0x5500550055005500 # tramp[5] addr of asm routine to jump to
+	.8byte 0x6600660066006600 # tramp[6] %s0 closure ptr
+	.8byte 0x7700770077007700 # tramp[7] %s1 struct return addr
+ffi_example_tramp_REG_common:
+	# can put things at common offset...
+	sic %s12		  # tramp[0]: point s2 --> trampoline+8
+        lea %s0, 6*8-8(,%s12)	  # tramp[1]: load closure tramp[5] arg1 --> s0
+        lea %s12, 5*8-8(,%s12)    # tramp[2]: tramp[7] asm addr --> s12
+        b.l (,%s12)		  # tramp[3]: branch to asm addr
+	.8byte 0x0000000000000000 # tramp[4] unused
+	.8byte 0x5500550055005500 # tramp[5] addr of asm routine to jump to
+	.8byte 0x6600660066006600 # tramp[6] %s0 closure ptr
+	.8byte 0x0000000000000000 # tramp[7] [unused] struct return addr
+# Does PIC require a trampoline with relative branch?
+ffi_lea_tramp_xxx:
+	#This trampolin is 80 bytes long, but no reading of instruction memory
+	# following 3 are equiv patterns
+	# for loading 64-byte "immediate" data into a register
+	lea	%s12,%lo(0x11aa11bb11cc11dd)		#--> dd 11 cc 11 00 00 0c 06
+	and	%s12,%s12,(32)0	# zero any sign-extension -> 00 00 00 00 60 8c 0c 44
+	lea.sl	%s0,%hi(0x11aa11bb11cc11dd)(,%s12)	#--> bb 11 aa 11 8c 00 80 06
+	# But above is **deprecate**			#                     %s0
+
+	# Preferred ( loading %s1 only if REFERNECE return type (o.w. can skip!)
+	lea	%s12, 0x22aa22bb22cc22dd@LO
+	and	%s12,%s12,(32)0				#                     %s1
+	lea.sl	%s1, 0x22aa22bb22cc22dd@HI(,%s12)	#--> bb 22 aa 22 8c 00 81 06
+
+	# for trampoling creation:
+	lea	%s12, 0x33cc33dd		# dd 33 cc 33 00 00 0c 06
+	and	%s12,%s12,(32)0
+	lea.sl	%s12, 0x33aa33bb(,%s12)		# bb 33 aa 33 8c 00 8c 06
+	b.l	(,%s12)
+	// or maybe
+	//b.l	0x33bb33bb(%s12)
+
+	
 # --------------------------- END --------- no useful code follows ------------
 #if 0
 VE ABI notes (these examples from Ch. 8 docs seem good)
@@ -747,3 +1096,5 @@ sysv_restore:
 	;#.set ffi_call_SYSV_sz, .-ffi_call_SYSV
 	;#.set ffi_call_SYSV_sz, 0x0  # -ve value, additional stack space for called function
 #endif
+
+

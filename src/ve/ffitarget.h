@@ -54,7 +54,12 @@ typedef enum ffi_abi {
 
 /* ---- Definitions for closures ----------------------------------------- */
 #define FFI_CLOSURES 0
-//#define FFI_TRAMPOLINE_SIZE 32
+#define FFI_TRAMPOLINE_SIZE 32 
+// Simple trampoline puts one 1 trampoline per allocated page.
+// Trampoline tables pack many trampoliness
+// into each mmaped executable-code page.
+#define FFI_EXEC_TRAMPOLINE_TABLE 0
+
 //#define FFI_NATIVE_RAW_API 0
 
 /* ----- VE-specific options --------------------------------------------- */

@@ -49,6 +49,12 @@
 #define NGREGARG 8
 //#define NFREGARG 12
 
+struct register_args
+{
+  /* Registers for argument passing.  */
+  UINT64 gpr[NREGARG];
+};
+
 void print_s0(UINT64 s0){
     debug(2, " print_s0: %lu = %ld = 0x%lx ", (long unsigned)s0,
             (long int)s0, (long unsigned)s0);
@@ -1291,53 +1297,235 @@ void ffi_call(/*@dependent@*/ ffi_cif *cif,
 
 #if FFI_CLOSURES
 #error "NEC VE closures TBD"
-extern void ffi_closure_SYSV (void);
-extern void __ic_invalidate (void *line);
+extern void ffi_closure_ve (void);
+//extern void __ic_invalidate (void *line);
 
+/* adapting x86/ffi64.c
+ * closure is the WRITABLE address returned by ffi_closure_alloc
+ *   [ this is what we have to set up in this call ]
+ * fun( ffi_cif* cif, void *ret, void **args, void *user_data )
+ *   is the function called by the closure.
+ * user_data is passed, uninterpreted, to your closure function.
+ * codeloc is the READ+EXEC pointer to *closure -- unused here
+ *   [ user casts this to appropriate fn-call type ]
+ */
+/*
+ * Where do I store %lr  (closure return address)
+ *
+ * closure("Hi")
+ * ... Reg/Ref args [%s0<--"Hi",]
+ * ... %s12 <-- addr of trampoline
+ * ... bsic %lr,(,%s12)
+ * --> trampoline executes!
+ * _______________________________
+ *   --> ffi_closure_ve (sysv.S)
+ * operating IN CALLER STACK FRAME
+ * fp -------   alloca -----------
+ *    |          32 (rval)
+ *    |         +64 (reg_args)
+ *    |         +48 (*_inner parms)  |*_inner (ffi.c)
+ *    |         ---                  |( ffi_cif *cif,
+ *    |  alloca(144)                 |  void(*fun)(ffi_cif*,void*ret,
+ *    |                              |     void**args,void*user_data),
+ *    |                              |  void *user_data,
+ *    |                              |  void*rvalue,
+ *    |                              |  struct register_args *reg_args,
+ *    |                              |  char *argp );
+ *    |------------------------------|__________________
+ *    |%s0:"Hi"(mem unset)           |
+ * 176|--------+-- argp -------------| argp
+ *    |(RSA)    \   retaddr+pad[16]  | (for ffi_closure_ve)
+ *    |(retaddr) \  rvalue[32]       | rvalue
+ *   0|(calleefp) \ reg_args[64]     | reg_args
+ *  sp|--------    \_inner args[6*8] | %s0..%s5
+ *              176\------------------------------
+ *                 |(RSA)            | *_inner
+ *                 |(retaddr)        | prologue
+ *                0|(calleefp)       | sets these    | *_inner
+ *               sp|----------//   fp------------    | now invokes
+ *                                   | locals        | (*fun)     
+ *                                   |-----------    |_____________
+ *                                   | alloca Parm   | fun args &
+ *                                   | Area of 'fun' | regs set up
+ *                                   | args-->"Hi",  | by *_inner
+ *                                   | etc.          |
+ *                             sp+176|-----------    |-------------
+ *                                   |(RSA)          | fun prologue
+ *                                   |(retaddr,fp)   | sets these
+ *                                 sp|-----------  fp|-------------
+ *                              _________________    |
+ *                             /  Unwind: ret   |    | etc.
+ *                            /    rvalue? flags|  sp|-------------
+ *  _________________________/
+ *    Unwind: rvalue        
+ *            -> reg        
+ */
+/* Closure Frame: size and offsets
+ *   0. sp..sp+176 reserved [not yet set!] for fp, ret addr, and RSA
+ *      *_inner WILL push %fp,%lr,%got,%plt,etc onto stack during prologue
+ *   1. alloca for:
+ *      a. return addr (+ 8-byte align, so %sp has 16-byte alignment)
+ *      b. space for rvalue (4 * 8byte)
+ *      c. store all possible reg args of 'fun' (8 * 8byte)
+ *      d. space for %s0..%s5 args to *_inner (6 * 8byte)
+ *         [even for REGISTER args, uninitialized arg area is given]
+ *   We don't want the overhead of full stack frame creation.
+ *   ffi closure offsets are wrt our new %sp -= ffi_closure_ALLOCA
+ */
 ffi_status
 ffi_prep_closure_loc (ffi_closure *closure,
 		      ffi_cif *cif,
-		      void (*fun)(ffi_cif*, void*, void**, void*),
+		      void (*fun)(ffi_cif*cif, void*ret, void**args, void*user_data),
 		      void *user_data,
 		      void *codeloc)
 {
-  unsigned int *tramp;
+    /* typedef struct {
+     *   char tramp[FFI_TRAMPOLINE_SIZE];
+     *   ffi_cif   *cif;
+     *   void     (*fun)(ffi_cif*,void*,void**,void*);
+     *   void      *user_data;
+     * } ffi_closure;
+     * 5d8:   00 00 00 00     bsic    %s12,0x0(0,%s12)
+     * 5dc:   8c 00 0c 08
+     * */
 
-  if (cif->abi != FFI_SYSV)
-    return FFI_BAD_ABI;
+    static const unsigned char trampoline[32] = {
+        // 0: lea %s12, asm_closure_foo@LO
+        //-------------------- LO: 0x33aa33bb33cc33dd@LO
+        0xdd, 0x33, 0xcc, 0x33, 0x00, 0x00, 0x0c, 0x06,
+        // 8: and     %s12,%s12,(32)0
+        0x00, 0x00, 0x00, 0x00, 0x60, 0x8c, 0x0c, 0x44,
+        // 16: lea.sl  %s12, asm_closure_foo@HI
+        //-------------------- HI: 0x33aa33bb33cc33dd@HI
+        0xbb, 0x33, 0xaa, 0x33, 0x8c, 0x00, 0x8c, 0x06,
+        // 32: bsic    %s12, (,%s12)
+        // NOTE: must not modify caller's %lr return address
+        0x00, 0x00, 0x00, 0x00, 0x8c, 0x00, 0x0c, 0x08
+    };
+    void (*dest)(void);
+    char *tramp = closure->tramp;
 
-  tramp = (unsigned int *) &closure->tramp[0];
-  /* Since ffi_closure is an aligned object, the ffi trampoline is
-     called as an SHcompact code.  Sigh.
-     SHcompact part:
-     mova @(1,pc),r0; add #1,r0; jmp @r0; nop;
-     SHmedia part:
-     movi fnaddr >> 16,r1; shori fnaddr,r1; ptabs/l r1,tr0
-     movi cxt >> 16,r1; shori cxt,r1; blink tr0,r63  */
-#ifdef __LITTLE_ENDIAN__
-  tramp[0] = 0x7001c701;
-  tramp[1] = 0x0009402b;
-#else
-  tramp[0] = 0xc7017001;
-  tramp[1] = 0x402b0009;
-#endif
-  tramp[2] = 0xcc000010 | (((UINT32) ffi_closure_SYSV) >> 16) << 10;
-  tramp[3] = 0xc8000010 | (((UINT32) ffi_closure_SYSV) & 0xffff) << 10;
-  tramp[4] = 0x6bf10600;
-  tramp[5] = 0xcc000010 | (((UINT32) codeloc) >> 16) << 10;
-  tramp[6] = 0xc8000010 | (((UINT32) codeloc) & 0xffff) << 10;
-  tramp[7] = 0x4401fff0;
+    if (cif->abi != FFI_SYSV)
+        return FFI_BAD_ABI;
 
-  closure->cif = cif;
-  closure->fun = fun;
-  closure->user_data = user_data;
+    ve_argclass retclass = argclass(cif->rtype);
+    assert(retclass == VE_REGISTER || retclass == VE_REFERENCE);
+    if( VE_REGISTER )
+        dest = ffi_closure_ve;
+    else
+        dest = ffi_closure_ve_struct;
+    // NB: could put this into a flags variable within cif.
 
-  /* Flush the icache.  */
-  asm volatile ("ocbwb %0,0; synco; icbi %1,0; synci" : : "r" (tramp),
-		"r"(codeloc));
+    memcpy(tramp, trampoline, sizeof(trampoline));
+    *(UINT32 *)(tramp + 0)  =/* LO */(UINT32)(uintptr_t)dest;
+    *(UINT32 *)(tramp + 16) =/* HI */(UINT32)((uintptr_t)dest>>32);
 
-  return FFI_OK;
+    // asm_FOO
+    closure->cif = cif;
+    closure->fun = fun;
+    closure->user_data = user_data;
+
+    /* Flush the icache.  How on VE? */
+    //asm volatile ("ocbwb %0,0; synco; icbi %1,0; synci" : : "r" (tramp), "r"(codeloc));
+    return FFI_OK;
 }
+
+
+int FFI_HIDDEN
+ffi_closure_inner(ffi_cif *cif,
+			 void (*fun)(ffi_cif*, void*, void**, void*),
+			 void *user_data,
+			 void *rvalue,
+			 struct register_args *reg_args,
+			 char *argp)
+{
+    /* cif->flags are set by machdep, above, for rtype */
+    /* cif->flags2 are set by machdep, above, for register-arg status */
+    void **avalue;
+    ffi_type **arg_types;
+    long i, avn;
+    int gprcount, ssecount, ngpr, nsse;
+    int flags;
+
+    avn = cif->nargs;
+    flags = cif->flags;
+    avalue = alloca(avn * sizeof(void *));
+    gprcount = ssecount = 0;
+
+    if (flags & UNIX64_FLAG_RET_IN_MEM)
+    {
+        /* On return, %rax will contain the address that was passed
+           by the caller in %rdi.  */
+        void *r = (void *)(uintptr_t)reg_args->gpr[gprcount++];
+        *(void **)rvalue = r;
+        rvalue = r;
+        flags = (sizeof(void *) == 4 ? UNIX64_RET_UINT32 : UNIX64_RET_INT64);
+    }
+
+    arg_types = cif->arg_types;
+    for (i = 0; i < avn; ++i)
+    {
+        enum x86_64_reg_class classes[MAX_CLASSES];
+        size_t n;
+
+        n = examine_argument (arg_types[i], classes, 0, &ngpr, &nsse);
+        if (n == 0
+                || gprcount + ngpr > MAX_GPR_REGS
+                || ssecount + nsse > MAX_SSE_REGS)
+        {
+            long align = arg_types[i]->alignment;
+
+            /* Stack arguments are *always* at least 8 byte aligned.  */
+            if (align < 8)
+                align = 8;
+
+            /* Pass this argument in memory.  */
+            argp = (void *) FFI_ALIGN (argp, align);
+            avalue[i] = argp;
+            argp += arg_types[i]->size;
+        }
+        /* If the argument is in a single register, or two consecutive
+           integer registers, then we can use that address directly.  */
+        else if (n == 1
+                || (n == 2 && !(SSE_CLASS_P (classes[0])
+                        || SSE_CLASS_P (classes[1]))))
+        {
+            /* The argument is in a single register.  */
+            if (SSE_CLASS_P (classes[0]))
+            {
+                avalue[i] = &reg_args->sse[ssecount];
+                ssecount += n;
+            }
+            else
+            {
+                avalue[i] = &reg_args->gpr[gprcount];
+                gprcount += n;
+            }
+        }
+        /* Otherwise, allocate space to make them consecutive.  */
+        else
+        {
+            char *a = alloca (16);
+            unsigned int j;
+
+            avalue[i] = a;
+            for (j = 0; j < n; j++, a += 8)
+            {
+                if (SSE_CLASS_P (classes[j]))
+                    memcpy (a, &reg_args->sse[ssecount++], 8);
+                else
+                    memcpy (a, &reg_args->gpr[gprcount++], 8);
+            }
+        }
+    }
+
+    /* Invoke the closure.  */
+    fun (cif, rvalue, avalue, user_data);
+
+    /* Tell assembly how to perform return type promotions.  */
+    return flags;
+}
+
 
 /* Basically the trampoline invokes ffi_closure_SYSV, and on
  * entry, r3 holds the address of the closure.
