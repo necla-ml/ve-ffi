@@ -1442,11 +1442,19 @@ ffi_closure_inner(ffi_cif *cif,
 {
     /* cif->flags are set by machdep, above, for rtype */
     /* cif->flags2 are set by machdep, above, for register-arg status */
+    char* const argp0 = argp;
     void **avalue;
     ffi_type **arg_types;
     long i, avn;
     int gprcount, ngpr; //ssecount, nsse;
     int flags;
+
+    // oops;
+    argp+=64;
+
+    debug(2, " reg_args[%ld]:0x%p ", (SINT64)((char*)rvalue-(char*)reg_args), (void*)reg_args);
+    debug(2, " rvalue:0x%p rvalue--argp:%ldb", (void*)rvalue, (SINT64)((char*)argp-(char*)rvalue));
+    debug(2, " argp@0x%p\n", (void*)argp);
 
     gprcount /*= ssecount*/ = 0;
 #if 0
@@ -1498,32 +1506,49 @@ ffi_closure_inner(ffi_cif *cif,
         ffi_type* const type = arg_types[i];
         size_t const UNITS_PER_WORD = 8;
         size_t const z = type->size;
+        long align = type->alignment;
         size_t n=0;
         //Argclass clas = argclass(type);
         if( type->type != FFI_TYPE_STRUCT ){
             n = (z + UNITS_PER_WORD - 1) / UNITS_PER_WORD;
         }
+        debug(2," i%dn%ug%d",(int)i,(unsigned)n,gprcount);
         // Some long scalars must begin on even-numbered reg
         if( n > 1 ){
             gprcount += (gprcount & 1);
+            debug(2,"%s","++g");
         }
-        if (n == 0 || gprcount + ngpr > NGREGARG){
-            long align = arg_types[i]->alignment;
+        if (n == 0 || gprcount + ngpr >= NGREGARG){
+            // IF n==0 ALLOCA ???
             /* Stack args *always* at least 8 byte aligned. */
-            if (align < 8) align = 8;
+            if (align < 8){
+                align = 8;
+            }
             /* Pass this argument in memory.  */
+            long argp_a = (argp-argp0);
             argp = (void *) FFI_ALIGN (argp, align);
+            if( argp != argp_a ){
+                debug(2," a%dargp%ld->%ld",(long)argp_a,(long)(argp-argp0));
+            }
+            if(n) debug(2," *argp%ld={int:%d,long:%ld}",(long)(argp-argp0),*(int*)argp, *(long*)argp);
+
             avalue[i] = argp;
-            argp += arg_types[i]->size;
+            debug(2," a%lds%luA[%d]", (long)align, (long unsigned)z, (int)(argp-argp0));
+            argp += z;
+            debug(2," -->argp%d\n", (int)(argp-argp0));
+            debug(2,"%s","\n");
         }
         /* If the argument is in a single register,
          * or two consecutive integer registers, then
          * we can use that address directly. */
         else if (n == 1)
         { /* The argument is in a single register. */
+            // NO FFI_ASSERT( align >= 8 );
             avalue[i] = &reg_args->gpr[gprcount];
+            debug(2," a%ds%d&R[%d]\n", align, z, gprcount);
             gprcount += n;
         }else{ /* o/w alloc space to make them consecutive. */
+            FFI_ASSERT( align >= 8 );
 #if 0
             // On VE regargs can always be alloa'ed? Why this?
             char *a = alloca (n*8);
@@ -1536,6 +1561,7 @@ ffi_closure_inner(ffi_cif *cif,
             }
 #else
             avalue[i] = &reg_args->gpr[gprcount];
+            debug(2," a%ds%d&R[%d..%d]\n", align, z, gprcount, gprcount+n-1);
             gprcount += n;
 #endif
         }

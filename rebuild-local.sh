@@ -14,17 +14,22 @@ if [ "${ok}" -eq 1 ]; then
 	make >& bld.log || { ok=0; echo "problems in testsuite/libffi.bhaible"; }
   echo "build log is in testsuite/libffi.bhaible/bld.log" 
 fi
-if [ "${ok}" -eq 1 ]; then
+#if [ "${ok}" -eq 1 ]; then
 	echo -n "testsuite/libffi.bhaible/test-call --> tst.log ..."
-	./test-call >& ../../tst.log || { ok=0; echo "trouble running test-call"; }
+	make check-call >& ../../tst.log || { ok=0; echo "trouble running test-call"; }
+  ls -lrst | tail -n10
+	if [ -f failed-call ]; then cat failed-call >> ../../tst.log; fi
+	echo "failed-call appended to tst.log"
 	echo " DONE"
-fi
-if [ "${ok}" -eq 1 ]; then
-	cat test-fail >> ../../tst.log
-	echo "test-fail appended to tst.log"
-fi
+	echo -n "testsuite/libffi.bhaible/test-callback --> tstcl.log ..."
+	make check-callback >& ../../tstcl.log || { ok=0; echo "trouble running test-callback"; }
+  ls -lrst | tail -n10
+	if [ -f tailed-callback ]; then cat failed-callback >> ../../tstcl.log; fi
+	echo "failed-callback appended to tstcl.log"
+	echo " DONE"
+#fi
 cd "${LIBFFIDIR}"
 if [ "${ok}" -ne 1 ]; then
-  vim ve-conf-local.log bld.log testsuite/libffi.bhaible/bld.log tst.log -o
+  echo vim ve-conf-local.log bld.log testsuite/libffi.bhaible/bld.log tst.log -o
 fi
 # vim: sw=2 ts=2 et:

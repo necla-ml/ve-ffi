@@ -65,7 +65,7 @@ typedef enum ffi_abi {
 /* ----- VE-specific options --------------------------------------------- */
 #ifndef VE_DEBUG_LEVEL
 /* in [0,5] */
-#define VE_DEBUG_LEVEL 0
+#define VE_DEBUG_LEVEL 5
 #endif
 #ifndef VE_SYSV_DEBUG
 /* Note: if compiling via nas, you NEED to override here (no -Dfoo=x on nas command line) */
