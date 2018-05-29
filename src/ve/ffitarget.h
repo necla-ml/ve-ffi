@@ -53,7 +53,7 @@ typedef enum ffi_abi {
 #endif
 
 /* ---- Definitions for closures ----------------------------------------- */
-#define FFI_CLOSURES 0
+#define FFI_CLOSURES 1
 #define FFI_TRAMPOLINE_SIZE 32 
 // Simple trampoline puts one 1 trampoline per allocated page.
 // Trampoline tables pack many trampoliness

@@ -36,6 +36,7 @@
 
 #include <math.h>       /* fabs */
 #include <complex.h>
+#include <assert.h>
 
 #ifndef VE_DEBUG_LEVEL /* now set in ve/ffitarget.h */
 #define VE_DEBUG_LEVEL   5
@@ -48,12 +49,6 @@
 
 #define NGREGARG 8
 //#define NFREGARG 12
-
-struct register_args
-{
-  /* Registers for argument passing.  */
-  UINT64 gpr[NREGARG];
-};
 
 void print_s0(UINT64 s0){
     debug(2, " print_s0: %lu = %ld = 0x%lx ", (long unsigned)s0,
@@ -222,7 +217,7 @@ static void* align16_zerofill (void *stkarg){
             while( (UINT64)stkarg & 0x0fUL ){
                 debug(4,"Z");
                 *(UINT64*)stkarg = 0UL; // for gdb
-                stkarg += 8;
+                stkarg = ((UINT64*)stkarg + 1);
             }
         }
     }
@@ -235,7 +230,7 @@ static void* align16_zerofill (void *stkarg){
  * Aurora int types are stored "at" \c regvalue (ie "LSB" part of 8-byte reg)
  */
 static char const* ffi_regvalue_str( ffi_type const* const t, void* regvalue ){
-    ffi_avalue_str (t, plus_bytes(regvalue, (t->type==FFI_TYPE_FLOAT? 4: 0)));
+    return ffi_avalue_str (t, plus_bytes(regvalue, (t->type==FFI_TYPE_FLOAT? 4: 0)));
 }
 
 static char buf_avalues[1024];
@@ -913,8 +908,8 @@ ffi_status ffi_prep_cif_machdep(ffi_cif *cif)
     UINT64 flags2 = 0UL;
     //int fpair = -1;
 #if defined(FFI_EXTRA_CIF_FIELDS)
-    int j=0;
-    int m;
+    //int j=0;
+    //int m;
     cif->flags2 = 0UL;
 #endif
 
@@ -1174,7 +1169,7 @@ void ffi_call_example(/*@dependent@*/ ffi_cif *cif,
 	      /*@dependent@*/ void **avalue)
 {
     extended_cif ecif;
-    UINT64 trvalue;     /* temporary rvalue */
+    //UINT64 trvalue;     /* temporary rvalue */
 
     /* argument values */
     ecif.cif = cif;
@@ -1296,9 +1291,15 @@ void ffi_call(/*@dependent@*/ ffi_cif *cif,
 }
 
 #if FFI_CLOSURES
-#error "NEC VE closures TBD"
 extern void ffi_closure_ve (void);
+extern void ffi_closure_ve_struct (void);
 //extern void __ic_invalidate (void *line);
+struct register_args
+{
+  /* Registers for argument passing.  */
+  UINT64 gpr[NGREGARG];
+};
+
 
 /* adapting x86/ffi64.c
  * closure is the WRITABLE address returned by ffi_closure_alloc
@@ -1408,7 +1409,7 @@ ffi_prep_closure_loc (ffi_closure *closure,
     if (cif->abi != FFI_SYSV)
         return FFI_BAD_ABI;
 
-    ve_argclass retclass = argclass(cif->rtype);
+    Argclass retclass = argclass(cif->rtype);
     assert(retclass == VE_REGISTER || retclass == VE_REFERENCE);
     if( VE_REGISTER )
         dest = ffi_closure_ve;
@@ -1444,14 +1445,11 @@ ffi_closure_inner(ffi_cif *cif,
     void **avalue;
     ffi_type **arg_types;
     long i, avn;
-    int gprcount, ssecount, ngpr, nsse;
+    int gprcount, ngpr; //ssecount, nsse;
     int flags;
 
-    avn = cif->nargs;
-    flags = cif->flags;
-    avalue = alloca(avn * sizeof(void *));
-    gprcount = ssecount = 0;
-
+    gprcount /*= ssecount*/ = 0;
+#if 0
     if (flags & UNIX64_FLAG_RET_IN_MEM)
     {
         /* On return, %rax will contain the address that was passed
@@ -1461,61 +1459,85 @@ ffi_closure_inner(ffi_cif *cif,
         rvalue = r;
         flags = (sizeof(void *) == 4 ? UNIX64_RET_UINT32 : UNIX64_RET_INT64);
     }
+#elif 0 // the non-x86 one has asm pass pgr & stack pointers
+    // THIS MIGHT BE MORE SUITED FOR VE
+    if (return_type (cif->rtype) == FFI_TYPE_STRUCT) {
+        rvalue = (UINT64 *) *pgr;
+        greg = 1;
+    }else
+        greg = 0;
+#else
+    UINT64 flags2 = cif->flags2;
+    //if( argclass(cif->rtype) == VE_REFERENCE )
+    if( cif->rtype->type == FFI_TYPE_STRUCT ) /* equiv? */
+    //if( (flags2&0xFF) == 0x80 ) /* equiv. */
+    {
+        FFI_ASSERT( cif->rtype->type == FFI_TYPE_STRUCT );
+        FFI_ASSERT( argclass(cif->rtype) == VE_REFERENCE );
+        FFI_ASSERT( (flags2&0xFF) == 0x80 );
+        /* use %s0 as a pointer register for return value */
+        void *r = (void *)(uintptr_t)reg_args->gpr[gprcount++];
+        //*(void **)rvalue = r;
+        rvalue = r;
+        //flags = (sizeof(void *) == 4 ? UNIX64_RET_UINT32 : UNIX64_RET_INT64);
+    }else{
+        FFI_ASSERT( cif->rtype->type != FFI_TYPE_STRUCT );
+        FFI_ASSERT( argclass(cif->rtype) != VE_REFERENCE );
+        FFI_ASSERT( (flags2&0xFF) != 0x80 );
+    }
+#endif
 
+    avn = cif->nargs;
+    flags = cif->flags;
+    avalue = alloca(avn * sizeof(void *));
     arg_types = cif->arg_types;
     for (i = 0; i < avn; ++i)
     {
-        enum x86_64_reg_class classes[MAX_CLASSES];
-        size_t n;
-
-        n = examine_argument (arg_types[i], classes, 0, &ngpr, &nsse);
-        if (n == 0
-                || gprcount + ngpr > MAX_GPR_REGS
-                || ssecount + nsse > MAX_SSE_REGS)
-        {
+        //enum x86_64_reg_class classes[MAX_CLASSES];
+        //n = examine_argument (arg_types[i], classes, 0, &ngpr, &nsse);
+        ffi_type* const type = arg_types[i];
+        size_t const UNITS_PER_WORD = 8;
+        size_t const z = type->size;
+        size_t n=0;
+        //Argclass clas = argclass(type);
+        if( type->type != FFI_TYPE_STRUCT ){
+            n = (z + UNITS_PER_WORD - 1) / UNITS_PER_WORD;
+        }
+        // Some long scalars must begin on even-numbered reg
+        if( n > 1 ){
+            gprcount += (gprcount & 1);
+        }
+        if (n == 0 || gprcount + ngpr > NGREGARG){
             long align = arg_types[i]->alignment;
-
-            /* Stack arguments are *always* at least 8 byte aligned.  */
-            if (align < 8)
-                align = 8;
-
+            /* Stack args *always* at least 8 byte aligned. */
+            if (align < 8) align = 8;
             /* Pass this argument in memory.  */
             argp = (void *) FFI_ALIGN (argp, align);
             avalue[i] = argp;
             argp += arg_types[i]->size;
         }
-        /* If the argument is in a single register, or two consecutive
-           integer registers, then we can use that address directly.  */
-        else if (n == 1
-                || (n == 2 && !(SSE_CLASS_P (classes[0])
-                        || SSE_CLASS_P (classes[1]))))
-        {
-            /* The argument is in a single register.  */
-            if (SSE_CLASS_P (classes[0]))
-            {
-                avalue[i] = &reg_args->sse[ssecount];
-                ssecount += n;
-            }
-            else
-            {
-                avalue[i] = &reg_args->gpr[gprcount];
-                gprcount += n;
-            }
-        }
-        /* Otherwise, allocate space to make them consecutive.  */
-        else
-        {
-            char *a = alloca (16);
+        /* If the argument is in a single register,
+         * or two consecutive integer registers, then
+         * we can use that address directly. */
+        else if (n == 1)
+        { /* The argument is in a single register. */
+            avalue[i] = &reg_args->gpr[gprcount];
+            gprcount += n;
+        }else{ /* o/w alloc space to make them consecutive. */
+#if 0
+            // On VE regargs can always be alloa'ed? Why this?
+            char *a = alloca (n*8);
+            FFI_ASSERT(((uintptr_t)a & 0x0F) == 0U); //align 16
             unsigned int j;
-
             avalue[i] = a;
             for (j = 0; j < n; j++, a += 8)
             {
-                if (SSE_CLASS_P (classes[j]))
-                    memcpy (a, &reg_args->sse[ssecount++], 8);
-                else
-                    memcpy (a, &reg_args->gpr[gprcount++], 8);
+                memcpy (a, &reg_args->gpr[gprcount++], 8);
             }
+#else
+            avalue[i] = &reg_args->gpr[gprcount];
+            gprcount += n;
+#endif
         }
     }
 
@@ -1526,7 +1548,7 @@ ffi_closure_inner(ffi_cif *cif,
     return flags;
 }
 
-
+#if 0 // sh approach (?)
 /* Basically the trampoline invokes ffi_closure_SYSV, and on
  * entry, r3 holds the address of the closure.
  * After storing the registers that could possibly contain
@@ -1539,121 +1561,89 @@ int
 ffi_closure_helper_SYSV (ffi_closure *closure, UINT64 *rvalue,
 			 UINT64 *pgr, UINT64 *pfr, UINT64 *pst)
 {
-  void **avalue;
-  ffi_type **p_arg;
-  int i, avn;
-  int greg, freg;
-  ffi_cif *cif;
-  //int fpair = -1;
+    void **avalue;
+    ffi_type **p_arg;
+    int i, avn;
+    int greg; //, freg;
+    ffi_cif *cif;
+    //int fpair = -1;
 
-  cif = closure->cif;
-  avalue = alloca (cif->nargs * sizeof (void *));
+    cif = closure->cif;
+    avalue = alloca (cif->nargs * sizeof (void *));
 
-  /* Copy the caller's structure return value address so that the closure
-     returns the data directly to the caller.  */
-  if (return_type (cif->rtype) == FFI_TYPE_STRUCT)
+    /* Copy the caller's structure return value address so that the closure
+       returns the data directly to the caller.  */
+    if (return_type (cif->rtype) == FFI_TYPE_STRUCT) {
+        rvalue = (UINT64 *) *pgr;
+        greg = 1;
+    }else
+        greg = 0;
+
+    //freg = 0;
+    cif = closure->cif;
+    avn = cif->nargs;
+
+    /* Grab addresses of the arguments from the stack frame.  */
+    for (i = 0, p_arg = cif->arg_types; i < avn; i++, p_arg++)
     {
-      rvalue = (UINT64 *) *pgr;
-      greg = 1;
-    }
-  else
-    greg = 0;
+        size_t z;
+        void *p;
 
-  freg = 0;
-  cif = closure->cif;
-  avn = cif->nargs;
+        z = (*p_arg)->size;
+        if (z < sizeof (UINT32)) {
+            p = pgr + greg++;
+            switch ((*p_arg)->type)
+            {
+                case FFI_TYPE_SINT8:
+                case FFI_TYPE_UINT8:
+                case FFI_TYPE_SINT16:
+                case FFI_TYPE_UINT16:
+                case FFI_TYPE_STRUCT:
+                    avalue[i] = p;
+                    break;
 
-  /* Grab the addresses of the arguments from the stack frame.  */
-  for (i = 0, p_arg = cif->arg_types; i < avn; i++, p_arg++)
-    {
-      size_t z;
-      void *p;
-
-      z = (*p_arg)->size;
-      if (z < sizeof (UINT32))
-	{
-	  p = pgr + greg++;
-
-	  switch ((*p_arg)->type)
-	    {
-	    case FFI_TYPE_SINT8:
-	    case FFI_TYPE_UINT8:
-	    case FFI_TYPE_SINT16:
-	    case FFI_TYPE_UINT16:
-	    case FFI_TYPE_STRUCT:
-#ifdef __LITTLE_ENDIAN__
-	      avalue[i] = p;
-#else
-	      avalue[i] = ((char *) p) + sizeof (UINT32) - z;
+                default:
+                    FFI_ASSERT(0);
+            }
+        }else if (z == sizeof (UINT32)){
+#if 0
+            if ((*p_arg)->type == FFI_TYPE_FLOAT){
+                if (freg < NFREGARG - 1){
+                    if (fpair >= 0){
+                        avalue[i] = (UINT32 *) pfr + fpair;
+                        fpair = -1;
+                    }else{
+                        fpair = freg;
+                        avalue[i] = (UINT32 *) pfr + (1 ^ freg);
+                        freg += 2;
+                    }
+                }else
+                    avalue[i] = pgr + greg;
+            }else
 #endif
-	      break;
+                avalue[i] = pgr + greg;
+            greg++;
+        }else if ((*p_arg)->type == FFI_TYPE_DOUBLE){
+            //if (freg + 1 >= NFREGARG)
+            //    avalue[i] = pgr + greg;
+            //else{
+                avalue[i] = pfr + (freg >> 1);
+                freg += 2;
+            //}
+            greg++;
+        }else{
+            int n = (z + sizeof (UINT64) - 1) / sizeof (UINT64);
 
-	    default:
-	      FFI_ASSERT(0);
-	    }
-	}
-      else if (z == sizeof (UINT32))
-	{
-	  if ((*p_arg)->type == FFI_TYPE_FLOAT)
-	    {
-	      if (freg < NFREGARG - 1)
-		{
-		  if (fpair >= 0)
-		    {
-		      avalue[i] = (UINT32 *) pfr + fpair;
-		      fpair = -1;
-		    }
-		  else
-		    {
-#ifdef __LITTLE_ENDIAN__
-		      fpair = freg;
-		      avalue[i] = (UINT32 *) pfr + (1 ^ freg);
-#else
-		      fpair = 1 ^ freg;
-		      avalue[i] = (UINT32 *) pfr + freg;
-#endif
-		      freg += 2;
-		    }
-		}
-	      else
-#ifdef __LITTLE_ENDIAN__
-		avalue[i] = pgr + greg;
-#else
-		avalue[i] = (UINT32 *) (pgr + greg) + 1;
-#endif
-	    }
-	  else
-#ifdef __LITTLE_ENDIAN__
-	    avalue[i] = pgr + greg;
-#else
-	    avalue[i] = (UINT32 *) (pgr + greg) + 1;
-#endif
-	  greg++;
-	}
-      else if ((*p_arg)->type == FFI_TYPE_DOUBLE)
-	{
-	  if (freg + 1 >= NFREGARG)
-	    avalue[i] = pgr + greg;
-	  else
-	    {
-	      avalue[i] = pfr + (freg >> 1);
-	      freg += 2;
-	    }
-	  greg++;
-	}
-      else
-	{
-	  int n = (z + sizeof (UINT64) - 1) / sizeof (UINT64);
-
-	  avalue[i] = pgr + greg;
-	  greg += n;
-	}
+            avalue[i] = pgr + greg;
+            greg += n;
+        }
     }
 
-  (closure->fun) (cif, rvalue, avalue, closure->user_data);
+    (closure->fun) (cif, rvalue, avalue, closure->user_data);
 
-  /* Tell ffi_closure_SYSV how to perform return type promotions.  */
-  return return_type (cif->rtype);
+    /* Tell ffi_closure_SYSV how to perform return type promotions.  */
+    return return_type (cif->rtype);
 }
+#endif // sh approach ?
 #endif /* FFI_CLOSURES */
 /* vim: set ts=4 sw=4 et ai: */

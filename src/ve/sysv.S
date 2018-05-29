@@ -671,14 +671,14 @@ sysv_ret:
 #define ffi_closure_OFS_G       (ffi_closure_OFS_PARMS + 6*8)
 #define ffi_closure_OFS_RVALUE  (ffi_closure_OFS_G + 8*8)
 #define ffi_closure_OFS_RETADDR (ffi_closure_OFS_RVALUE + 4*8)
-#define ffi_closure_OFS_ARGP    (ffi_closure_OFS_RET + 8 + 8/*flg*/)
+#define ffi_closure_OFS_ARGP    (ffi_closure_OFS_RETADDR + 8 + 8/*flg*/)
 #define ffi_closure_ALLOCA      (ffi_closure_OFS_ARGP - ffi_closure_OFS_G)
 #else
 .set ffi_closure_OFS_PARMS   , 176
 .set ffi_closure_OFS_G       , (ffi_closure_OFS_PARMS + 6*8)
 .set ffi_closure_OFS_RVALUE  , (ffi_closure_OFS_G + 8*8)
 .set ffi_closure_OFS_RETADDR , (ffi_closure_OFS_RVALUE + 4*8)
-.set ffi_closure_OFS_ARGP    , (ffi_closure_OFS_RET + 8 + 8/*align*/)
+.set ffi_closure_OFS_ARGP    , (ffi_closure_OFS_RETADDR + 8 + 8/*align*/)
 #.set ffi_closure_ALLOCA      , (ffi_closure_OFS_ARGP - ffi_closure_OFS_G)
 /* 48 + 64 + 32 + 8+8 = 160 bytes for alloca */
 #define ffi_closure_ALLOCA 160
@@ -774,7 +774,7 @@ ffi_closure_ve:
 
 .L_closure_rvalue:
 	lea	%s4, ffi_closure_OFS_RVALUE(,%sp)	/* %s2: ptr-to-rvalue memory */
-	ld	%lr, ffi_closure_OFS_REGADDR(,%sp)	/* restore pre-trampoline return address */
+	ld	%lr, ffi_closure_OFS_RETADDR(,%sp)	/* restore pre-trampoline return address */
 	st	%s5, ffi_closure_OFS_RETADDR+0x08(,%sp) /* 0/1: REFERENCE rvalue? */
 	breq.l.t	%s5,0,.L_closure_REGISTER
 .L_closure_REFERENCE:
@@ -846,7 +846,7 @@ ffi_closure_vexx:
 	.cfi_endproc
 
 .balign 16
-.globl ffi_example_tramp
+.globl ffi_example_tramp_MINIMAL
 ffi_x86style_tramp:
 	sic	%s12
 	lea	%s0,-8(,%s12)	# %s0 = closure = tramp addr
