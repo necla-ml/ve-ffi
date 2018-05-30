@@ -786,6 +786,12 @@ void S16_v_simulator (ffi_cif* cif, void* retp, /*const*/ void* /*const*/ *args,
 void I_III_simulator (ffi_cif* cif, void* retp, /*const*/ void* /*const*/ *args, void* data)
 {
   if (data != (void*)&I_III) { fprintf(out,"wrong data for I_III\n"); exit(1); }
+  if(0){
+    FPRINTF(out," a@0x%lx ",(long unsigned)args[0]);
+    FPRINTF(out," b@0x%lx ",(long unsigned)args[1]);
+    FPRINTF(out," c@0x%lx ",(long unsigned)args[2]);
+    FPRINTF(out," ((Int*)c)->x=%d ",((Int*)args[2])->x);
+  }
  {Int a = *(Int*)(*args++);
   Int b = *(Int*)(*args++);
   Int c = *(Int*)(*args++);

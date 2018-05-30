@@ -14,7 +14,10 @@ endif
 
 VE_EXEC ?=
 CC ?= gcc
-CFLAGS = -O2 -Wall
+#CFLAGS = -O2 -Wall
+CFLAGS = -g2 -O0 -Wall
+#CFLAGS += -g2 # Aurora error: 
+#         ncc: Assertion failed: fcg/temp_movement.C, line 482: Operands location is unknown
 includedir = $(prefix)/include
 libdir = $(prefix)/lib
 CPPFLAGS = -I$(includedir)
@@ -46,28 +49,33 @@ settings:
 	echo "CLOSURE_TARGETS : $(CLOSURE_TARGETS)"
 	ls -l $(prefix)/lib
 
+# TODO enable static linkage for test-call
 test-call test-call-v test-call-pic test-call-pic-v: test-call.c testcases.c
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -o test-call test-call.c -lffi
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $(PIC_FLAGS) -o test-call-pic test-call.c -lffi
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $(VERBOSE_FLAGS) -o test-call-v test-call.c -lffi
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $(PIC_FLAGS) $(VERBOSE_FLAGS) -o test-call-pic-v test-call.c -lffi
 
-test-callback: test-callback.c testcases.c
+test-callback test-callback-v: test-callback.c testcases.c
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -o test-callback test-callback.c -lffi
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $(VERBOSE_FLAGS) -o test-callback-v test-callback.c -lffi
 
 check-call: test-call
-	$(VE_EXEC) ./test-call 2>&1 | tee test-call.out
-	LC_ALL=C uniq -u < test-call.out > failed-call
+	$(VE_EXEC) ./$< 2>&1 | tee $<.out
+	grep '.*):(.*->' $<.out > $<.out1
+	LC_ALL=C uniq -u < $<.out1 > failed-call
 	test '!' -s failed-call
 
 check-call-pic: test-call-pic
 	$(VE_EXEC) $< 2>&1 | tee $<.out
-	LC_ALL=C uniq -u < $<.out > failed-call-pic
+	grep '.*):(.*->' $<.out > $<.out1
+	LC_ALL=C uniq -u < $<.out1 > failed-call-pic
 	test '!' -s failed-call-pic
 
 check-callback: test-callback
-	$(VE_EXEC) ./test-callback 2>&1 | tee test-callback.out
-	LC_ALL=C uniq -u < test-callback.out > failed-callback
+	$(VE_EXEC) ./$< 2>&1 | tee $<.out
+	grep '.*):(.*->' $<.out > $<.out1
+	LC_ALL=C uniq -u < $<.out1 > failed-callback
 	test '!' -s failed-callback
 
 clean:

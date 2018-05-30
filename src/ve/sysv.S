@@ -733,10 +733,17 @@ ffi_closure_ve:
 	or	%s0,0,%s62	# restore value of %s0
 	# ... CLOSURE_ALLOCA bytes below %sp are usable ...
 .L_closure_space:
+	# I **want** to not have a stack frame (use caller's frame)
+	# What needs to be done to have gdb not get confused? (FIXME)
+	#st	%fp, 0(,%sp)
+	#st	%lr, 8(,%sp) # not enough.
+
 	/* stow final return addr (%lr), and entry point indicator (%s60)
 	 *    Trampoline does not touch caller's %lr return address ! */
-	st	%lr,  ffi_closure_OFS_RETADDR+0x00(,%sp)	/* caller's ret addr */
-	st	%s60, ffi_closure_OFS_RETADDR+0x08(,%sp)	/* 0/1: REFERENCE rvalue? */
+	# Turns out that %s60 is not used as such.  Could use it for
+	# other rvalue help, or just get rid of it from trampoline area
+	st	%lr,  ffi_closure_OFS_RETADDR+0x00(,%sp)	# caller's ret addr
+	st	%s60, ffi_closure_OFS_RETADDR+0x08(,%sp)	# 0/1: REFERENCE rvalue?
 
 	/* OFS_PARMS: leave 6*8 mem space [uninitialized]
 	 * to mirror %s0..%s5 args that we'll pass to *_inner. */
@@ -776,42 +783,42 @@ ffi_closure_ve:
 
 
 .L_closure_rvalue:
-	lea	%s1, ffi_closure_OFS_PARMS(,%sp)	/* tmp area (reuse) */
-	st	%s0, 0(,%s1)	/* stow rtype flags */
+#if 0
+	lea	%s1, ffi_closure_OFS_PARMS(,%sp)	# tmp area (reuse)
+	st	%s0, 0(,%s1)				# stow rtype flags
 	PRINT_MSG_U64(cl_rflags, or %s1,0,%s0)
-
-	lea	%s1, ffi_closure_OFS_PARMS(,%sp)	/* tmp area (reuse) */
-	ld	%s6, 0(,%s1)	/* load rtype flags */
+	lea	%s1, ffi_closure_OFS_PARMS(,%sp)	# tmp area (reuse)
+	ld	%s6, 0(,%s1)				# load rtype flags
+#else
+	or	%s6, 0,%s0
+#endif
 
 	lea	%s1, ffi_closure_OFS_PARMS(,%sp)
-	lea	%s4, ffi_closure_OFS_RVALUE(,%sp)/* %s2: ptr-to-rvalue memory */
-	ld	%lr, ffi_closure_OFS_RETADDR(,%sp)/* restore pre-trampoline return address */
-	ld	%s5, ffi_closure_OFS_RETADDR+0x08(,%sp) /* 0/1: REFERENCE rvalue? */
-	breq.l.t	%s5,0,.L_closure_REGISTER
-.L_closure_REFERENCE:
-	# TODO
-
-.L_closure_REGISTER: # rvalue could be up to long double complex (4 registers)
+	lea	%s4, ffi_closure_OFS_RVALUE(,%sp)	# pre-tramp ret addr
+	ld	%lr, ffi_closure_OFS_RETADDR(,%sp)	# rvalue mem ptr
+# Following branch turned out not useful for VE
+#	ld	%s5, ffi_closure_OFS_RETADDR+0x08(,%sp) # 0/1: REFERENCE rvalue?
+#	breq.l.t	%s5,0,.L_closure_REGISTER
+#.L_closure_REFERENCE:
+#	# TODO
+#
+#.L_closure_REGISTER: # rvalue could be up to long double complex (4 registers)
 	brne.w.t	FFI_TYPE_FLOAT,%s6, .L_cl_notFLOAT
-	ldu	%s0, 0x00(,%s4)
+	ldu	%s0, ffi_closure_OFS_RVALUE+0x00(,%sp)
 	br.w	.L_closure_ret
 .L_cl_notFLOAT:
-	ld	%s0, 0x00(,%s4)
-	ld	%s1, 0x08(,%s4)
-	ld	%s2, 0x10(,%s4)
-	ld	%s3, 0x18(,%s4)
+	ld	%s0, ffi_closure_OFS_RVALUE+0x00(,%sp)
+	ld	%s1, ffi_closure_OFS_RVALUE+0x08(,%sp)
+	ld	%s2, ffi_closure_OFS_RVALUE+0x10(,%sp)
+	ld	%s3, ffi_closure_OFS_RVALUE+0x18(,%sp)
 	# rvalue processing (return value ---> registers, maybe)
 	#   MAYBE bump up %sp early so we can "b.l (,%lr)"
 	#         instead of "br.w .L_closure_ret"
 
 .L_closure_ret:
-	/* (dup) pre-trampoline return address */
-	ld	%lr, ffi_closure_OFS_RETADDR(,%sp)
-	# Bump up %sp again (remove our alloca space)
-	lea	%sp, ffi_closure_ALLOCA(,%sp)		/* remove alloca space */
-	# After this, we should not execute function calls.
-
-	b.l	(,%lr)
+	ld	%lr, ffi_closure_OFS_RETADDR(,%sp)	# pre-tramp ret addr
+	lea	%sp, ffi_closure_ALLOCA(,%sp)		# remove alloca space
+	b.l	(,%lr)					# return (pre-tramp)
 	.size	ffi_closure_ve, . - ffi_closure_ve
 
 ffi_closure_vexx:

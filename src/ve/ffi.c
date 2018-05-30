@@ -1446,35 +1446,17 @@ ffi_closure_inner(ffi_cif *cif,
     void **avalue;
     ffi_type **arg_types;
     long i, avn;
-    int gprcount, ngpr; //ssecount, nsse;
+    int gprcount; //, ngpr; //ssecount, nsse;
     int flags;
 
-    // oops;
+    // oops: I follow x86 in providing a separate reg_args area (FIXME)
     argp+=64;
 
-    debug(2, " reg_args[%ld]:0x%p ", (SINT64)((char*)rvalue-(char*)reg_args), (void*)reg_args);
-    debug(2, " rvalue:0x%p rvalue--argp:%ldb", (void*)rvalue, (SINT64)((char*)argp-(char*)rvalue));
-    debug(2, " argp@0x%p\n", (void*)argp);
+    debug(2, " reg_args[%ld]:%p ", (SINT64)((char*)rvalue-(char*)reg_args), (void*)reg_args);
+    debug(2, " rvalue:%p rvalue--argp:%ldb", (void*)rvalue, (SINT64)((char*)argp-(char*)rvalue));
+    debug(2, " argp@%p\n", (void*)argp);
 
     gprcount /*= ssecount*/ = 0;
-#if 0
-    if (flags & UNIX64_FLAG_RET_IN_MEM)
-    {
-        /* On return, %rax will contain the address that was passed
-           by the caller in %rdi.  */
-        void *r = (void *)(uintptr_t)reg_args->gpr[gprcount++];
-        *(void **)rvalue = r;
-        rvalue = r;
-        flags = (sizeof(void *) == 4 ? UNIX64_RET_UINT32 : UNIX64_RET_INT64);
-    }
-#elif 0 // the non-x86 one has asm pass pgr & stack pointers
-    // THIS MIGHT BE MORE SUITED FOR VE
-    if (return_type (cif->rtype) == FFI_TYPE_STRUCT) {
-        rvalue = (UINT64 *) *pgr;
-        greg = 1;
-    }else
-        greg = 0;
-#else
     UINT64 flags2 = cif->flags2;
     //if( argclass(cif->rtype) == VE_REFERENCE )
     if( cif->rtype->type == FFI_TYPE_STRUCT ) /* equiv? */
@@ -1493,8 +1475,6 @@ ffi_closure_inner(ffi_cif *cif,
         FFI_ASSERT( argclass(cif->rtype) != VE_REFERENCE );
         FFI_ASSERT( (flags2&0xFF) != 0x80 );
     }
-#endif
-
     avn = cif->nargs;
     flags = cif->flags;
     avalue = alloca(avn * sizeof(void *));
@@ -1512,18 +1492,70 @@ ffi_closure_inner(ffi_cif *cif,
         if( type->type != FFI_TYPE_STRUCT ){
             n = (z + UNITS_PER_WORD - 1) / UNITS_PER_WORD;
         }
-        debug(2," i%dn%ug%d",(int)i,(unsigned)n,gprcount);
+        debug(2," i%dsz%lun%ug%d",(int)i,(unsigned long)z,(unsigned)n,(int)gprcount);
         // Some long scalars must begin on even-numbered reg
         if( n > 1 ){
             gprcount += (gprcount & 1);
             debug(2,"%s","++g");
         }
-        if (n == 0 || gprcount + ngpr >= NGREGARG){
+        if (n == 0 ){ // ve struct passed as ptr, which can be in reg
+            //printf(" n==0 "); fflush(stdout);
+            FFI_ASSERT( argclass(type) == VE_REFERENCE );
+            //if (align < 8){ align = 8; }
+            //argp = (void *) FFI_ALIGN (argp, align);
+            if( gprcount < NGREGARG ){
+                // VE caller passes "pointer to struct" in register
+                // *** libfii always assumes avalues points "at the object" ***
+#if 0 // this is one indirection too much:
+                if (align < 8){ align = 8; }
+                argp = (void *) FFI_ALIGN (argp, align);
+                // p ((Int*)(**args))->x within I_III_simulator is correct,
+                // but it should work as Int a = *(Int*)(*args++)
+                avalue[i] = &reg_args->gpr[gprcount];
+                debug(2," a%ds%d&R[%d]=0x%lx", (int)align, (int)z, (int)gprcount,
+                    (long)&reg_args->gpr[gprcount]);
+                int* pint = *(int**)avalue[i];
+                debug(2," *%d", pint[0]);
+                ++gprcount;
+#else // reg_args: VE stores a POINTER-TO-MEM here.
+                // this pointer-to-mem must end up in avalues[i].
+                //if (align < 8){ align = 8; }
+                //argp = (void *) FFI_ALIGN (argp, align);
+                // p ((Int*)(**args))->x within I_III_simulator is correct,
+                // but it should work as Int a = *(Int*)(*args++)
+                avalue[i] = (void*)reg_args->gpr[gprcount];
+                debug(2," a%ds%d&R[%d]=0x%lx", (int)align, (int)z, (int)gprcount,
+                    (long)&reg_args->gpr[gprcount]);
+                //int* pint = *(int*)avalue[i];
+                //debug(2," *%d", pint[0]);
+                ++gprcount;
+#endif
+            }else{
+#if 0
+                if (align < 8){ align = 8; }
+                argp = (void *) FFI_ALIGN (argp, align);
+                avalue[i] = argp;
+                debug(2," a%ds%d&A[%d]=%p", (int)align, (int)z,
+                        (int)(argp-argp0), (void*)argp); fflush(stdout);
+                argp += z;
+                debug(2," -->argp%d", (int)(argp-argp0));
+                // yup, need another indirection...
+#else
+                argp = (void *) FFI_ALIGN (argp, 8); // alignment of void*
+                debug(2," argp%d=%p",(int)(argp-argp0),(void*)argp);
+                debug(2," *argp%d=%p",(int)(argp-argp0),*(void**)argp);
+                avalue[i] = *(void**)argp;
+                debug(2," a%ds%d&A[%d]=%p", (int)align, (int)z,
+                        (int)(argp-argp0), *(void**)argp); fflush(stdout);
+                argp += sizeof(void*); 
+                debug(2," -->argp%d", (int)(argp-argp0));
+#endif
+            }
+            debug(2,"%s","\n");
+        }else if (gprcount + n > NGREGARG){
             // IF n==0 ALLOCA ???
             /* Stack args *always* at least 8 byte aligned. */
-            if (align < 8){
-                align = 8;
-            }
+            if (align < 8){ align = 8; }
             /* Pass this argument in memory.  */
             long argp_a = (argp-argp0);
             argp = (void *) FFI_ALIGN (argp, align);
@@ -1534,19 +1566,16 @@ ffi_closure_inner(ffi_cif *cif,
             if( (argp-argp0) != argp_a ){
                 debug(2," a%dargp%ld->%ld",(long)argp_a,(long)(argp-argp0));
             }
-            if(n) debug(2," *argp%ld={int:%d,long:%ld}",(long)(argp-argp0),*(int*)argp, *(long*)argp);
+            if(n) debug(2," *argp%ld={int:%d,long:%ld}",(long)(argp-argp0),
+                    *(int*)argp, *(long*)argp);
 
             avalue[i] = argp;
             debug(2," a%lds%luA[%d]", (long)align, (long unsigned)z, (int)(argp-argp0));
             argp += z; // ok for struct?
             debug(2," -->argp%d", (int)(argp-argp0));
             debug(2,"%s","\n");
-        }
-        /* If the argument is in a single register,
-         * or two consecutive integer registers, then
-         * we can use that address directly. */
-        else if (n == 1)
-        { /* The argument is in a single register. */
+        }else if (n == 1) { /* The argument is in a single register. */
+            /* we can use arg address directly. */
             // NO FFI_ASSERT( align >= 8 );
             avalue[i] = &reg_args->gpr[gprcount];
             if(type->type == FFI_TYPE_FLOAT){
@@ -1554,13 +1583,18 @@ ffi_closure_inner(ffi_cif *cif,
                 UINT64 i = reg_args->gpr[gprcount];
                 i >>= 32;
                 reg_args->gpr[gprcount] = i;
-                debug(2," flt%d=%f",(int)gprcount,*(float*)(&reg_args->gpr[gprcount]));
-                debug(2," flt%d'=%f",(int)gprcount,*((float*)(&reg_args->gpr[gprcount])+1));
+                debug(2," flt%d=%f",(int)gprcount,
+                        *(float*)(&reg_args->gpr[gprcount]));
+                debug(2," flt%d'=%f",(int)gprcount,
+                        *((float*)(&reg_args->gpr[gprcount])+1));
             }
-            debug(2," a%ds%d&R[%d]=0x%lx\n", align, z, gprcount,&reg_args->gpr[gprcount]);
+            debug(2," a%ds%d&R[%d]=0x%lx\n", align, (int)z, gprcount,
+                    &reg_args->gpr[gprcount]);
             gprcount += n;
         }else{ /* o/w alloc space to make them consecutive. */
+            /* n==2 or 4? we can use arg address directly. */
             FFI_ASSERT( align >= 8 );
+            FFI_ASSERT( n==2 || n==4 );
 #if 0
             // On VE regargs can always be alloa'ed? Why this?
             char *a = alloca (n*8);
@@ -1573,7 +1607,8 @@ ffi_closure_inner(ffi_cif *cif,
             }
 #else
             avalue[i] = &reg_args->gpr[gprcount];
-            debug(2," a%ds%d&R[%d..%d]\n", align, z, gprcount, gprcount+n-1);
+            debug(2," a%ds%d&R[%d..%d]\n", align, z, gprcount,
+                    gprcount+n-1);
             gprcount += n;
 #endif
         }
@@ -1583,7 +1618,7 @@ ffi_closure_inner(ffi_cif *cif,
     fun (cif, rvalue, avalue, user_data);
 
     /* Tell assembly how to perform return type promotions.  */
-    debug(2, "_inner flags=rtype?=%d\n",flags);
+    /*debug(2, "_inner flags=rtype?=%d\n",flags);*/
     return flags;
 }
 
