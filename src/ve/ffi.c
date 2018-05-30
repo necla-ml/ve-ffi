@@ -1527,15 +1527,19 @@ ffi_closure_inner(ffi_cif *cif,
             /* Pass this argument in memory.  */
             long argp_a = (argp-argp0);
             argp = (void *) FFI_ALIGN (argp, align);
-            if( argp != argp_a ){
+            if( type->type == FFI_TYPE_FLOAT ){
+                argp+=4; // single floats are held in
+                //          little-endian MSB, unlike ints
+            }
+            if( (argp-argp0) != argp_a ){
                 debug(2," a%dargp%ld->%ld",(long)argp_a,(long)(argp-argp0));
             }
             if(n) debug(2," *argp%ld={int:%d,long:%ld}",(long)(argp-argp0),*(int*)argp, *(long*)argp);
 
             avalue[i] = argp;
             debug(2," a%lds%luA[%d]", (long)align, (long unsigned)z, (int)(argp-argp0));
-            argp += z;
-            debug(2," -->argp%d\n", (int)(argp-argp0));
+            argp += z; // ok for struct?
+            debug(2," -->argp%d", (int)(argp-argp0));
             debug(2,"%s","\n");
         }
         /* If the argument is in a single register,
@@ -1545,7 +1549,15 @@ ffi_closure_inner(ffi_cif *cif,
         { /* The argument is in a single register. */
             // NO FFI_ASSERT( align >= 8 );
             avalue[i] = &reg_args->gpr[gprcount];
-            debug(2," a%ds%d&R[%d]\n", align, z, gprcount);
+            if(type->type == FFI_TYPE_FLOAT){
+                /* swap up/lo halves */
+                UINT64 i = reg_args->gpr[gprcount];
+                i >>= 32;
+                reg_args->gpr[gprcount] = i;
+                debug(2," flt%d=%f",(int)gprcount,*(float*)(&reg_args->gpr[gprcount]));
+                debug(2," flt%d'=%f",(int)gprcount,*((float*)(&reg_args->gpr[gprcount])+1));
+            }
+            debug(2," a%ds%d&R[%d]=0x%lx\n", align, z, gprcount,&reg_args->gpr[gprcount]);
             gprcount += n;
         }else{ /* o/w alloc space to make them consecutive. */
             FFI_ASSERT( align >= 8 );
@@ -1571,6 +1583,7 @@ ffi_closure_inner(ffi_cif *cif,
     fun (cif, rvalue, avalue, user_data);
 
     /* Tell assembly how to perform return type promotions.  */
+    debug(2, "_inner flags=rtype?=%d\n",flags);
     return flags;
 }
 

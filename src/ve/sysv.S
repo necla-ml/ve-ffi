@@ -37,7 +37,7 @@
 #endif
 
 #ifndef VE_SYSV_DEBUG /* define in to ve/ffitarget.h, incl via ffi.h */
-#define VE_SYSV_DEBUG 0
+#define VE_SYSV_DEBUG 1
 #endif
 
 #define CNAME(x) x
@@ -260,7 +260,9 @@ foo_bar:
 	LOAD_S1; \
 	DEFINE_STRING( sysv_str_##NAME, #NAME ); \
 	TXT_ADDRESS( %s0, sysv_str_##NAME ); \
-	bsic	%lr,(,%s28)
+	TXT_ADDRESS( %s12, print_msg_u64 ); \
+	bsic	%lr,(,%s12); \
+	/*bsic	%lr,(,%s28)*/
 #define PRINT_MSG_U64X( NAME, XSTRING, LOAD_S1... ) \
 	LOAD_S1; \
 	DEFINE_STRING( sysv_str_##NAME, XSTRING ); \
@@ -678,7 +680,8 @@ sysv_ret:
 .set ffi_closure_OFS_G       , (ffi_closure_OFS_PARMS + 6*8)
 .set ffi_closure_OFS_RVALUE  , (ffi_closure_OFS_G + 8*8)
 .set ffi_closure_OFS_RETADDR , (ffi_closure_OFS_RVALUE + 4*8)
-.set ffi_closure_OFS_ARGP    , (ffi_closure_OFS_RETADDR + 8 + 8/*align*/)
+.set ffi_closure_OFS_RTYPE   , (ffi_closure_OFS_RETADDR + 8)
+.set ffi_closure_OFS_ARGP    , (ffi_closure_OFS_RETADDR + 8 + 8/*flags*/)
 #.set ffi_closure_ALLOCA      , (ffi_closure_OFS_ARGP - ffi_closure_OFS_G)
 /* 48 + 64 + 32 + 8+8 = 160 bytes for alloca */
 #define ffi_closure_ALLOCA 160
@@ -757,15 +760,15 @@ ffi_closure_ve:
 	 *     (TRAMPOLINE_BYTES past the actual trampoline)
 	 * %s1 --> where cif, fun, and user_data are stored
 	 */
-	ld	%s0, 0(,%s12)				/* Load cif */
-	ld	%s1, 8(,%s12)				/* Load fun */
-	ld	%s2, 16(,%s12)				/* Load user_data */
+	ld	%s0, 0(,%s12)			/* Load cif */
+	ld	%s1, 8(,%s12)			/* Load fun */
+	ld	%s2, 16(,%s12)			/* Load user_data */
 	/* we no longer need trampoline area */
 
 .L_do_closure:
-	lea	%s3, ffi_closure_OFS_RVALUE(,%sp)	/* Load rvalue (4 byte max) */
-	lea	%s4, ffi_closure_OFS_G(,%sp)		/* Load reg_args (64 bytes) */
-	lea	%s5, ffi_closure_OFS_ARGP(,%sp)		/* Load argp */
+	lea	%s3, ffi_closure_OFS_RVALUE(,%sp)/* Load rvalue (4 byte max) */
+	lea	%s4, ffi_closure_OFS_G(,%sp)	/* Load reg_args (64 bytes) */
+	lea	%s5, ffi_closure_OFS_ARGP(,%sp)	/* Load argp */
 
 
 	addr_s12 ffi_closure_inner
@@ -773,14 +776,26 @@ ffi_closure_ve:
 
 
 .L_closure_rvalue:
-	lea	%s4, ffi_closure_OFS_RVALUE(,%sp)	/* %s2: ptr-to-rvalue memory */
-	ld	%lr, ffi_closure_OFS_RETADDR(,%sp)	/* restore pre-trampoline return address */
-	st	%s5, ffi_closure_OFS_RETADDR+0x08(,%sp) /* 0/1: REFERENCE rvalue? */
+	lea	%s1, ffi_closure_OFS_PARMS(,%sp)	/* tmp area (reuse) */
+	st	%s0, 0(,%s1)	/* stow rtype flags */
+	PRINT_MSG_U64(cl_rflags, or %s1,0,%s0)
+
+	lea	%s1, ffi_closure_OFS_PARMS(,%sp)	/* tmp area (reuse) */
+	ld	%s6, 0(,%s1)	/* load rtype flags */
+
+	lea	%s1, ffi_closure_OFS_PARMS(,%sp)
+	lea	%s4, ffi_closure_OFS_RVALUE(,%sp)/* %s2: ptr-to-rvalue memory */
+	ld	%lr, ffi_closure_OFS_RETADDR(,%sp)/* restore pre-trampoline return address */
+	ld	%s5, ffi_closure_OFS_RETADDR+0x08(,%sp) /* 0/1: REFERENCE rvalue? */
 	breq.l.t	%s5,0,.L_closure_REGISTER
 .L_closure_REFERENCE:
 	# TODO
 
 .L_closure_REGISTER: # rvalue could be up to long double complex (4 registers)
+	brne.w.t	FFI_TYPE_FLOAT,%s6, .L_cl_notFLOAT
+	ldu	%s0, 0x00(,%s4)
+	br.w	.L_closure_ret
+.L_cl_notFLOAT:
 	ld	%s0, 0x00(,%s4)
 	ld	%s1, 0x08(,%s4)
 	ld	%s2, 0x10(,%s4)
@@ -790,6 +805,8 @@ ffi_closure_ve:
 	#         instead of "br.w .L_closure_ret"
 
 .L_closure_ret:
+	/* (dup) pre-trampoline return address */
+	ld	%lr, ffi_closure_OFS_RETADDR(,%sp)
 	# Bump up %sp again (remove our alloca space)
 	lea	%sp, ffi_closure_ALLOCA(,%sp)		/* remove alloca space */
 	# After this, we should not execute function calls.
