@@ -23,6 +23,7 @@
 #if defined(HAVE_COMPLEX)
 #include <complex.h>
 #endif
+#include <string.h>
 
 FILE* out;
 
@@ -625,6 +626,18 @@ void* vp_vpdpcpsp (void* a, double* b, char* c, Int* d)
   fprintf(out,"void* f(void*,double*,char*,Int*):(0x%p,0x%p,0x%p,0x%p)",a,b,c,d);
   fflush(out);
   return ret;
+}
+
+/* string tests */
+int i_cpcp (char *a, char *b)
+{
+  const int maxlen = 80;
+  char result[maxlen];
+  fprintf(out,"int f(char*,char*):('%s','%s')",a,b);
+  fflush(out);
+  strncat(result, a, maxlen-1);
+  strncat(result, b, maxlen-1-strlen(a));
+  return strlen(result);
 }
 
 /* mixed number tests */

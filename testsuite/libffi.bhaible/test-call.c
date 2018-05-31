@@ -2271,6 +2271,31 @@ void
   return;
 }
 
+void
+  string_tests (void)
+{
+  int ir;
+#if (!defined(DGTEST)) || DGTEST == 82
+  /* standard libffi convention for FFI_TYPE_POINTER is to pass-by-address */
+  ir = i_cpcp(str1, str2);
+  FPRINTF(out,"->%d\n",ir);
+  fflush(out);
+  ir = 0; clear_traces();
+  {
+    ffi_type* argtypes[] = { &ffi_type_pointer, &ffi_type_pointer };
+    ffi_cif cif;
+    FFI_PREP_CIF(cif,argtypes,ffi_type_sint);
+    {
+      /*const*/ void* args[] = { (void*)&str1, (void*)&str2 };
+      FFI_CALL(cif, i_cpcp, args, &ir);
+    }
+  }
+  FPRINTF(out,"->%d\n",ir);
+  fflush(out);
+#endif
+  return;
+}
+
 int
   main (void)
 {
@@ -2294,6 +2319,7 @@ int
   small_structure_return_tests();
   structure_tests();
   gpargs_boundary_tests();
+  string_tests();
 
   printf("test-call: normal exit\n");
   printf("test-call: normal exit\n"); /* print it twice, so uniq doesn't think FAIL */
