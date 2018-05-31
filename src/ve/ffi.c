@@ -1607,6 +1607,11 @@ ffi_closure_inner(ffi_cif *cif,
             }
 #else
             avalue[i] = &reg_args->gpr[gprcount];
+            if(type->type == FFI_TYPE_LONGDOUBLE){
+                UINT64 const tmp = reg_args->gpr[gprcount];
+                reg_args->gpr[gprcount] = reg_args->gpr[gprcount+1];
+                reg_args->gpr[gprcount+1] = tmp;
+            }
             debug(2," a%ds%d&R[%d..%d]\n", align, z, gprcount,
                     gprcount+n-1);
             gprcount += n;

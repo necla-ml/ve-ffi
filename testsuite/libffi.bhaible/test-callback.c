@@ -352,6 +352,99 @@ void d_d16_simulator (ffi_cif* cif, void* retp, /*const*/ void* /*const*/ *args,
   *(double*)retp = r;
 }}
 
+#if HAVE_LONG_DOUBLE
+/* long long double tests */
+void ld_ld_simulator (ffi_cif* cif, void* retp, /*const*/ void* /*const*/ *args, void* data)
+{
+  if (data != (void*)&ld_ld) { fprintf(out,"wrong data for ld_ld\n"); exit(1); }
+ {long double a = *(long double*)(*args++);
+  long double r=a+1.0;
+  FPRINTF(out,"long double f(long double):(%g)",(double)a);
+  fflush(out);
+  *(long double*)retp = r;
+}}
+void ld_ld2_simulator (ffi_cif* cif, void* retp, /*const*/ void* /*const*/ *args, void* data)
+{
+  if (data != (void*)&ld_ld2) { fprintf(out,"wrong data for ld_ld2\n"); exit(1); }
+ {long double a = *(long double*)(*args++);
+  long double b = *(long double*)(*args++);
+  long double r=a+b;
+  FPRINTF(out,"long double f(2*long double):(%g,%g)",(double)a,(double)b);
+  fflush(out);
+  *(long double*)retp = r;
+}}
+void ld_ld4_simulator (ffi_cif* cif, void* retp, /*const*/ void* /*const*/ *args, void* data)
+{
+  if (data != (void*)&ld_ld4) { fprintf(out,"wrong data for ld_ld4\n"); exit(1); }
+ {long double a = *(long double*)(*args++);
+  long double b = *(long double*)(*args++);
+  long double c = *(long double*)(*args++);
+  long double d = *(long double*)(*args++);
+  long double r=a+b+c+d;
+  FPRINTF(out,"long double f(4*long double):(%g,%g,%g,%g)",(double)a,(double)b,(double)c,(double)d);
+  fflush(out);
+  *(long double*)retp = r;
+}}
+void ld_ld8_simulator (ffi_cif* cif, void* retp, /*const*/ void* /*const*/ *args, void* data)
+{
+  if (data != (void*)&ld_ld8) { fprintf(out,"wrong data for ld_ld8\n"); exit(1); }
+ {long double a = *(long double*)(*args++);
+  long double b = *(long double*)(*args++);
+  long double c = *(long double*)(*args++);
+  long double d = *(long double*)(*args++);
+  long double e = *(long double*)(*args++);
+  long double f = *(long double*)(*args++);
+  long double g = *(long double*)(*args++);
+  long double h = *(long double*)(*args++);
+  long double r=a+b+c+d+e+f+g+h;
+  FPRINTF(out,"long double f(8*long double):(%g,%g,%g,%g,%g,%g,%g,%g)",(double)a,(double)b,(double)c,(double)d,(double)e,(double)f,(double)g,(double)h);
+  fflush(out);
+  *(long double*)retp = r;
+}}
+void ld_fldx5_simulator (ffi_cif* cif, void* retp, /*const*/ void* /*const*/ *args, void* data)
+{
+  if (data != (void*)&ld_fldx5) { fprintf(out,"wrong data for ld_fldx5\n"); exit(1); }
+ {float a = *(float*)(*args++);
+  long double b = *(long double*)(*args++);
+  float c = *(float*)(*args++);
+  long double d = *(long double*)(*args++);
+  float e = *(float*)(*args++);
+  long double f = *(long double*)(*args++);
+  float g = *(float*)(*args++);
+  long double h = *(long double*)(*args++);
+  float i = *(float*)(*args++);
+  long double j = *(long double*)(*args++);
+  long double r=a+b+c+d+e+f+g+h+i+j;
+  FPRINTF(out,"long double f(5*(float,long double)):(%g,%g,%g,%g,%g,%g,%g,%g,%g,%g)",(double)a,(double)b,(double)c,(double)d,(double)e,(double)f,(double)g,(double)h,(double)i,(double)j);
+  fflush(out);
+  *(long double*)retp = r;
+}}
+void ld_ld16_simulator (ffi_cif* cif, void* retp, /*const*/ void* /*const*/ *args, void* data)
+{
+  if (data != (void*)&ld_ld16) { fprintf(out,"wrong data for ld_ld16\n"); exit(1); }
+ {long double a = *(long double*)(*args++);
+  long double b = *(long double*)(*args++);
+  long double c = *(long double*)(*args++);
+  long double d = *(long double*)(*args++);
+  long double e = *(long double*)(*args++);
+  long double f = *(long double*)(*args++);
+  long double g = *(long double*)(*args++);
+  long double h = *(long double*)(*args++);
+  long double i = *(long double*)(*args++);
+  long double j = *(long double*)(*args++);
+  long double k = *(long double*)(*args++);
+  long double l = *(long double*)(*args++);
+  long double m = *(long double*)(*args++);
+  long double n = *(long double*)(*args++);
+  long double o = *(long double*)(*args++);
+  long double p = *(long double*)(*args++);
+  long double r=a+b+c+d+e+f+g+h+i+j+k+l+m+n+o+p;
+  FPRINTF(out,"long double f(16*long double):(%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g)",(double)a,(double)b,(double)c,(double)d,(double)e,(double)f,(double)g,(double)h,(double)i,(double)j,(double)k,(double)l,(double)m,(double)n,(double)o,(double)p);
+  fflush(out);
+  *(long double*)retp = r;
+}}
+#endif // HAVE_LONG_DOUBLE
+
 /* pointer tests */
 void vp_vpdpcpsp_simulator (ffi_cif* cif, void* retp, /*const*/ void* /*const*/ *args, void* data)
 {
@@ -1591,6 +1684,123 @@ int main (void)
     fflush(out);
 #endif
   }
+
+#if HAVE_LONG_DOUBLE
+  /* double tests */
+  { long double ldr;
+
+#if (!defined(DGTEST)) || DGTEST == 14
+    ldr = ld_ld(ld1);
+    fprintf(out,"->%g\n",(double)ldr);
+    fflush(out);
+    ldr = 0.0; clear_traces();
+    ALLOC_CALLBACK();
+    {
+      ffi_type* argtypes[] = { &ffi_type_longdouble };
+      ffi_cif cif;
+      FFI_PREP_CIF(cif,argtypes,ffi_type_longdouble);
+      PREP_CALLBACK(cif,ld_ld_simulator,(void*)&ld_ld);
+      ldr = ((long double (*) (long double)) callback_code) (ld1);
+    }
+    FREE_CALLBACK();
+    FPRINTF(out,"->%g\n",(double)ldr);
+    fflush(out);
+#endif
+
+#if (!defined(DGTEST)) || DGTEST == 15    
+    ldr = ld_ld2(ld1,ld2);
+    fprintf(out,"->%g\n",(double)ldr);
+    fflush(out);
+    ldr = 0.0; clear_traces();
+    ALLOC_CALLBACK();
+    {
+      ffi_type* argtypes[] = { &ffi_type_longdouble, &ffi_type_longdouble };
+      ffi_cif cif;
+      FFI_PREP_CIF(cif,argtypes,ffi_type_longdouble);
+      PREP_CALLBACK(cif,ld_ld2_simulator,(void*)&ld_ld2);
+      ldr = ((long double (*) (long double,long double)) callback_code) (ld1,ld2);
+    }
+    FREE_CALLBACK();
+    FPRINTF(out,"->%g\n",(double)ldr);
+    fflush(out);
+#endif
+  
+#if (!defined(DGTEST)) || DGTEST == 16    
+    ldr = ld_ld4(ld1,ld2,ld3,ld4);
+    fprintf(out,"->%g\n",(double)ldr);
+    fflush(out);
+    ldr = 0.0; clear_traces();
+    ALLOC_CALLBACK();
+    {
+      ffi_type* argtypes[] = { &ffi_type_longdouble, &ffi_type_longdouble, &ffi_type_longdouble, &ffi_type_longdouble };
+      ffi_cif cif;
+      FFI_PREP_CIF(cif,argtypes,ffi_type_longdouble);
+      PREP_CALLBACK(cif,ld_ld4_simulator,(void*)&ld_ld4);
+      ldr = ((long double (*) (long double,long double,long double,long double)) callback_code) (ld1,ld2,ld3,ld4);
+    }
+    FREE_CALLBACK();
+    FPRINTF(out,"->%g\n",(double)ldr);
+    fflush(out);
+#endif
+
+#if (!defined(DGTEST)) || DGTEST == 17    
+    ldr = ld_ld8(ld1,ld2,ld3,ld4,ld5,ld6,ld7,ld8);
+    fprintf(out,"->%g\n",(double)ldr);
+    fflush(out);
+    ldr = 0.0; clear_traces();
+    ALLOC_CALLBACK();
+    {
+      ffi_type* argtypes[] = { &ffi_type_longdouble, &ffi_type_longdouble, &ffi_type_longdouble, &ffi_type_longdouble, &ffi_type_longdouble, &ffi_type_longdouble, &ffi_type_longdouble, &ffi_type_longdouble };
+      ffi_cif cif;
+      FFI_PREP_CIF(cif,argtypes,ffi_type_longdouble);
+      PREP_CALLBACK(cif,ld_ld8_simulator,(void*)&ld_ld8);
+      ldr = ((long double (*) (long double,long double,long double,long double,long double,long double,long double,long double)) callback_code) (ld1,ld2,ld3,ld4,ld5,ld6,ld7,ld8);
+    }
+    FREE_CALLBACK();
+    FPRINTF(out,"->%g\n",(double)ldr);
+    fflush(out);
+    /* */
+    ldr = ld_fldx5(f1,ld1,f2,ld2,f3,ld3,f4,ld4,f5,ld5);
+    fprintf(out,"->%g\n",(double)ldr);
+    fflush(out);
+    ldr = 0.0; clear_traces();
+    ALLOC_CALLBACK();
+    {
+      ffi_type* argtypes[] = {
+	      &ffi_type_float, &ffi_type_longdouble,
+	      &ffi_type_float, &ffi_type_longdouble,
+	      &ffi_type_float, &ffi_type_longdouble,
+	      &ffi_type_float, &ffi_type_longdouble,
+	      &ffi_type_float, &ffi_type_longdouble };
+      ffi_cif cif;
+      FFI_PREP_CIF(cif,argtypes,ffi_type_longdouble);
+      PREP_CALLBACK(cif,ld_fldx5_simulator,(void*)&ld_fldx5);
+      ldr = ((long double (*) (float,long double, float,long double, float,long double, float,long double, float,long double)) callback_code) (f1,ld1,f2,ld2,f3,ld3,f4,ld4,f5,ld5);
+    }
+    FREE_CALLBACK();
+    FPRINTF(out,"->%g\n",(double)ldr);
+    fflush(out);
+#endif
+
+#if (!defined(DGTEST)) || DGTEST == 18
+    ldr = ld_ld16(ld1,ld2,ld3,ld4,ld5,ld6,ld7,ld8,ld9,ld10,ld11,ld12,ld13,ld14,ld15,ld16);
+    fprintf(out,"->%g\n",(double)ldr);
+    fflush(out);
+    ldr = 0.0; clear_traces();
+    ALLOC_CALLBACK();
+    {
+      ffi_type* argtypes[] = { &ffi_type_longdouble, &ffi_type_longdouble, &ffi_type_longdouble, &ffi_type_longdouble, &ffi_type_longdouble, &ffi_type_longdouble, &ffi_type_longdouble, &ffi_type_longdouble, &ffi_type_longdouble, &ffi_type_longdouble, &ffi_type_longdouble, &ffi_type_longdouble, &ffi_type_longdouble, &ffi_type_longdouble, &ffi_type_longdouble, &ffi_type_longdouble };
+      ffi_cif cif;
+      FFI_PREP_CIF(cif,argtypes,ffi_type_longdouble);
+      PREP_CALLBACK(cif,ld_ld16_simulator,(void*)&ld_ld16);
+      ldr = ((long double (*) (long double,long double,long double,long double,long double,long double,long double,long double,long double,long double,long double,long double,long double,long double,long double,long double)) callback_code) (ld1,ld2,ld3,ld4,ld5,ld6,ld7,ld8,ld9,ld10,ld11,ld12,ld13,ld14,ld15,ld16);
+    }
+    FREE_CALLBACK();
+    FPRINTF(out,"->%g\n",(double)ldr);
+    fflush(out);
+#endif
+  }
+#endif // HAVE_LONG_DOUBLE
 
   /* pointer tests */
   { void* vpr;

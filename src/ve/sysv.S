@@ -804,9 +804,16 @@ ffi_closure_ve:
 #
 #.L_closure_REGISTER: # rvalue could be up to long double complex (4 registers)
 	brne.w.t	FFI_TYPE_FLOAT,%s6, .L_cl_notFLOAT
+	ffi_cl_rFLOAT:
 	ldu	%s0, ffi_closure_OFS_RVALUE+0x00(,%sp)
 	br.w	.L_closure_ret
 .L_cl_notFLOAT:
+	brne.w.t	FFI_TYPE_LONGDOUBLE,%s6, .L_cl_notLDOUBLE
+	ffi_cl_rSwap01: /* %s0 <---> higher mem address */
+	ld	%s0, ffi_closure_OFS_RVALUE+0x08(,%sp)
+	ld	%s1, ffi_closure_OFS_RVALUE+0x00(,%sp)
+	br.w	.L_closure_ret
+.L_cl_notLDOUBLE:
 	ld	%s0, ffi_closure_OFS_RVALUE+0x00(,%sp)
 	ld	%s1, ffi_closure_OFS_RVALUE+0x08(,%sp)
 	ld	%s2, ffi_closure_OFS_RVALUE+0x10(,%sp)
