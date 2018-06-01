@@ -23,6 +23,7 @@
 #if defined(HAVE_COMPLEX)
 #include <complex.h>
 #endif
+#include <string.h>
 
 FILE* out;
 
@@ -626,8 +627,21 @@ void* vp_vpdpcpsp (void* a, double* b, char* c, Int* d)
   fflush(out);
   return ret;
 }
+
+/* string tests */
+int i_cpcp (char *a, char *b)
+{
+  const int maxlen = 80;
+  char result[maxlen];
+  fprintf(out,"int f(char*,char*):('%s','%s')",a,b);
+  fflush(out);
+  result[0] = '\0';
+  strncat(result, a, maxlen-1);
+  strncat(result, b, maxlen-1-strlen(a));
+  return strlen(result);
+}
 ulong ul_cp3 (char /*const*/ * a, char /*const*/ * b, char /*const*/ * c){
-  ulong ret=0UL;
+  ulong ret=0UL; /* sum hashes of all three strings */
   int i;
   char *x;
   char buf[80];
@@ -635,18 +649,19 @@ ulong ul_cp3 (char /*const*/ * a, char /*const*/ * b, char /*const*/ * c){
   if( i<0 || i>=80 ) goto oops;
   fprintf(out,"ulong ul_cp3(%s)",&buf[0]);
   for(x=a,i=0; *x!='\0'; ++x){
-    if(++i > 20) goto oops; else ret += i*(ulong)*x;
+    if(++i > 20) goto oops; else ret += i * (ulong)*x;
   }
   for(x=b,i=0; *x!='\0'; ++x){
-    if(++i > 20) goto oops; else ret += i*(ulong)*x;
+    if(++i > 20) goto oops; else ret += i * (ulong)*x;
   }
   for(x=c,i=0; *x!='\0'; ++x){
-    if(++i > 20) goto oops; else ret += i*(ulong)*x;
+    if(++i > 20) goto oops; else ret += i * (ulong)*x;
   }
   goto ok;
 oops: ret=13UL;
 ok: return ret;
 }
+
 /* mixed number tests */
 uchar uc_ucsil (uchar a, ushort b, uint c, ulong d)
 {

@@ -950,7 +950,6 @@ void
 {
   void* vpr;
   double dr;
-  ulong ulr;
 
 #if (!defined(DGTEST)) || DGTEST == 19
 #if 0
@@ -1018,25 +1017,6 @@ void
     }
   }
   FPRINTF(out,"->0x%p\n",vpr);
-  fflush(out);
-  /* */
-  ulr = ul_cp3(str1,str2,str3);
-  FPRINTF(out,"->%lu\n",ulr);
-  fflush(out);
-  ulr = 0UL; clear_traces();
-  {
-    ffi_type* argtypes[] = { &ffi_type_pointer, &ffi_type_pointer, &ffi_type_pointer };
-    ffi_cif cif;
-    FFI_PREP_CIF(cif,argtypes,ffi_type_pointer);
-    {
-      void* pstr1 = str1;
-      void* pstr2 = str2;
-      void* pstr3 = str3;
-      /*const*/ void* args[] = { &pstr1, &pstr2, &pstr3 };
-      FFI_CALL(cif,ul_cp3,args,&ulr);
-    }
-  }
-  FPRINTF(out,"->0x%lu\n",ulr);
   fflush(out);
 #endif
   return;
@@ -2290,6 +2270,57 @@ void
   return;
 }
 
+void
+  string_tests (void)
+{
+  int ir;
+  ulong ulr;
+#if (!defined(DGTEST)) || DGTEST == 82
+  /* standard libffi convention for FFI_TYPE_POINTER is to pass-by-address */
+  ir = i_cpcp(str1, str2);
+  FPRINTF(out,"->%d\n",ir);
+  fflush(out);
+  ir = 0; clear_traces();
+  {
+    ffi_type* argtypes[] = { &ffi_type_pointer, &ffi_type_pointer };
+    ffi_cif cif;
+    FFI_PREP_CIF(cif,argtypes,ffi_type_sint);
+    {
+#if 0 /* fails: */
+      /*const*/ void* args[] = { (void*)&str1, (void*)&str2 };
+#else
+      void* pstr1 = str1;
+      void* pstr2 = str2;
+      /*const*/ void* args[] = { &pstr1, (void*)&pstr2 };
+#endif
+      FFI_CALL(cif, i_cpcp, args, &ir);
+    }
+  }
+  FPRINTF(out,"->%d\n",ir);
+  fflush(out);
+  /* */
+  ulr = ul_cp3(str1,str2,str3);
+  FPRINTF(out,"->%lu\n",ulr);
+  fflush(out);
+  ulr = 0UL; clear_traces();
+  {
+    ffi_type* argtypes[] = { &ffi_type_pointer, &ffi_type_pointer, &ffi_type_pointer };
+    ffi_cif cif;
+    FFI_PREP_CIF(cif,argtypes,ffi_type_pointer);
+    {
+      void* pstr1 = str1;
+      void* pstr2 = str2;
+      void* pstr3 = str3;
+      /*const*/ void* args[] = { &pstr1, &pstr2, &pstr3 };
+      FFI_CALL(cif,ul_cp3,args,&ulr);
+    }
+  }
+  FPRINTF(out,"->%lu\n",ulr);
+  fflush(out);
+#endif
+  return;
+}
+
 int
   main (void)
 {
@@ -2313,6 +2344,7 @@ int
   small_structure_return_tests();
   structure_tests();
   gpargs_boundary_tests();
+  string_tests();
 
   printf("test-call: normal exit\n");
   printf("test-call: normal exit\n"); /* print it twice, so uniq doesn't think FAIL */

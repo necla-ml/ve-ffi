@@ -1413,6 +1413,46 @@ void d_l7d_simulator (ffi_cif* cif, void* retp, /*const*/ void* /*const*/ *args,
   fflush(out);
   *(double*)retp = r;
 }}
+void i_cpcp_simulator (ffi_cif* cif, void* retp, /*const*/ void* /*const*/ *args, void* data)
+{
+  if (data != (void*)&i_cpcp) { fprintf(out,"wrong data for i_cpcp\n"); exit(1); }
+ {char* a = *(char* *)(*args++);
+  char* b = *(char* *)(*args++);
+  const int maxlen = 80;
+  char result[maxlen];
+  fprintf(out,"int f(char*,char*):('%s','%s')",a,b);
+  fflush(out);
+  result[0] = '\0';
+  strncat(result, a, maxlen-1);
+  strncat(result, b, maxlen-1-strlen(a));
+  *(int*)retp = strlen(result);
+}}
+void ul_cp3_simulator (ffi_cif* cif, void* retp, /*const*/ void* /*const*/ *args, void* data)
+{
+  if (data != (void*)&ul_cp3) { fprintf(out,"wrong data for ul_cp3\n"); exit(1); }
+ {char* a = *(char* *)(*args++);
+  char* b = *(char* *)(*args++);
+  char* c = *(char* *)(*args++);
+  ulong ret=0UL; /* sum hashes of all three strings */
+  int i;
+  char *x;
+  char buf[80];
+  i = snprintf(&buf[0],80,"\"%s\",\"%s\",\"%s\"",a,b,c);
+  if( i<0 || i>=80 ) goto oops;
+  fprintf(out,"ulong ul_cp3(%s)",&buf[0]);
+  for(x=a,i=0; *x!='\0'; ++x){
+    if(++i > 20) goto oops; else ret += i * (ulong)*x;
+  }
+  for(x=b,i=0; *x!='\0'; ++x){
+    if(++i > 20) goto oops; else ret += i * (ulong)*x;
+  }
+  for(x=c,i=0; *x!='\0'; ++x){
+    if(++i > 20) goto oops; else ret += i * (ulong)*x;
+  }
+  goto ok;
+oops: ret=13UL;
+ok: *(ulong*)retp = ret;
+}}
 
 
 /*
@@ -2875,7 +2915,7 @@ int main (void)
     Tr.c[0] = Tr.c[1] = Tr.c[2] = 0; clear_traces();
     ALLOC_CALLBACK();
     {
-      ffi_type* ffi_type_T_elements[] = { ??, NULL };
+      ffi_type* ffi_type_T_elements[] = { /* ?? */ &ffi_type_char, &ffi_type_char, &ffi_type_char_, NULL };
       ffi_type ffi_type_T;
       ffi_type_T.type = FFI_TYPE_STRUCT;
       ffi_type_T.size = sizeof(T);
@@ -2900,7 +2940,7 @@ int main (void)
     Xr.c[0]=Xr.c1='\0'; clear_traces();
     ALLOC_CALLBACK();
     {
-      ffi_type* ffi_type_X_elements[] = { ??, NULL };
+      ffi_type* ffi_type_X_elements[] = { &ffi_type_pointer, /* ?? */ &ffi_type_char, NULL };
       ffi_type ffi_type_X;
       ffi_type_X.type = FFI_TYPE_STRUCT;
       ffi_type_X.size = sizeof(X);
@@ -3320,6 +3360,46 @@ int main (void)
     fflush(out);
 #endif
 
+  }
+
+  /* string tests */
+  {
+    int ir;
+    ulong ulr;
+#if (!defined(DGTEST)) || DGTEST == 81
+    /* standard libffi convention for FFI_TYPE_POINTER is to pass-by-address */
+    ir = i_cpcp(str1, str2);
+    FPRINTF(out,"->%d\n",ir);
+    fflush(out);
+    ir = 0; clear_traces();
+    ALLOC_CALLBACK();
+    {
+      ffi_type* argtypes[] = { &ffi_type_pointer, &ffi_type_pointer };
+      ffi_cif cif;
+      FFI_PREP_CIF(cif,argtypes,ffi_type_sint);
+      PREP_CALLBACK(cif,i_cpcp_simulator,(void*)i_cpcp);
+      ir = ((int (*) (char*,char*)) callback_code) (str1,str2);
+    }
+    FREE_CALLBACK();
+    FPRINTF(out,"->%d\n",ir);
+    fflush(out);
+    /* */
+    ulr = ul_cp3(str1,str2,str3);
+    FPRINTF(out,"->%lu\n",ulr);
+    fflush(out);
+    ulr = 0UL; clear_traces();
+    ALLOC_CALLBACK();
+    {
+      ffi_type* argtypes[] = { &ffi_type_pointer, &ffi_type_pointer, &ffi_type_pointer };
+      ffi_cif cif;
+      FFI_PREP_CIF(cif,argtypes,ffi_type_pointer);
+      PREP_CALLBACK(cif,ul_cp3_simulator,(void*)ul_cp3);
+      ulr = ((ulong (*) (char*,char*,char*)) callback_code) (str1,str2,str3);
+    }
+    FREE_CALLBACK();
+    FPRINTF(out,"->%lu\n",ulr);
+    fflush(out);
+#endif
   }
 
   printf("test-callback: normal exit\n");
