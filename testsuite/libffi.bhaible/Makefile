@@ -34,7 +34,7 @@ VERBOSE_FLAGS:=-DVE_DEBUG_LEVEL=5 -DVE_SYSV_DEBUG=1
 
 #CFLAGS += -fPIC -DPIC -g
 #LDFLAGS += -shared
-PIC_FLAGS:=-fPIC -DPIC -shared
+PIC_FLAGS:=-fPIC -DPIC
 
 CLOSURE_TARGETS:=
 ifeq ($(CLOSURE_SUPPORT),1)
@@ -51,10 +51,12 @@ settings:
 
 # TODO enable static linkage for test-call
 test-call test-call-v test-call-pic test-call-pic-v: test-call.c testcases.c
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -o test-call test-call.c -lffi
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -Wl,-Bstatic -o test-call test-call.c -lffi
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $(PIC_FLAGS) -o test-call-pic test-call.c -lffi
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $(VERBOSE_FLAGS) -o test-call-v test-call.c -lffi
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $(PIC_FLAGS) $(VERBOSE_FLAGS) -o test-call-pic-v test-call.c -lffi
+	-nreadelf -d test-call-pic | grep '\(NEEDED\)\|\(RPATH\)'
+	-nreadelf -d test-call | grep '\(NEEDED\)\|\(RPATH\)'
 
 test-callback test-callback-v: test-callback.c testcases.c
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -o test-callback test-callback.c -lffi
@@ -79,4 +81,8 @@ check-callback: test-callback
 	test '!' -s failed-callback
 
 clean:
-	rm -f test-call test-callback test-call.out test-callback.out failed-call failed-callback
+	rm -f test-call test-call-pic test-call-v test-call-pic-v \
+		test-callback test-callback-v \
+		test-call.out test-call.out1 \
+		test-callback.out test-callback.out1 \
+	       	failed-call failed-callback failed-call-pic

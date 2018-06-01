@@ -330,12 +330,14 @@ ffi_call_SYSV:
 	;				# skip %tp at 0x10(,%sp)
 	st	%got,0x18(,%sp)
 	st	%plt,0x20(,%sp)
+#ifdef PIC
 	lea	%got,_GLOBAL_OFFSET_TABLE_@PC_LO(-24) 	#-0x18
 	and	%got,%got,(32)0
 	sic	%plt			# %plt := IC + 8
 	lea.sl	%got,_GLOBAL_OFFSET_TABLE_@PC_HI(%plt,%got)
+#endif
+
 	or	%fp,0,%sp		# %fp := %sp
-	
 	.cfi_def_cfa_register	9	# %s9 is the frame points
 	S18_TO_33( st, %fp )		# %s18-%s33 Callee-saved
 
@@ -701,6 +703,15 @@ ffi_closure_ve:
 	or	%s60,0,(1)0
 	# %s60 flags our entry-point
 .L_ffi_closure_s60:
+	.cfi_startproc
+#if 0 /* set up a real stack frame --- arg offset would all change !! */
+	st %fp,0x0(,%sp)
+	.cfi_def_cfa_offfset 0
+	.cfi_offfset	9,0
+	st %lr, 0x8(,%sp)
+	or %fp,0,%sp
+#endif
+
 	/* We are still in the caller's stack-frame.
 	 * Parameter area for callee is at 176(%fp).
 	 * For Aurora this begins with space for REGISTER args.
@@ -783,19 +794,21 @@ ffi_closure_ve:
 
 
 .L_closure_rvalue:
-#if 0
+#if 0 // old. (debug not needed since ffi_call shows "how")
 	lea	%s1, ffi_closure_OFS_PARMS(,%sp)	# tmp area (reuse)
 	st	%s0, 0(,%s1)				# stow rtype flags
 	PRINT_MSG_U64(cl_rflags, or %s1,0,%s0)
 	lea	%s1, ffi_closure_OFS_PARMS(,%sp)	# tmp area (reuse)
 	ld	%s6, 0(,%s1)				# load rtype flags
-#else
-	or	%s6, 0,%s0
+#else // just use scratch registers... no calls allowed
+	and	%s6, %s0,(58)0		# rtype->type from LSB (FFI_TYPE_FOO)
+	srl	%s7, %s0,8		# rtype->size in next byte
 #endif
 
 	lea	%s1, ffi_closure_OFS_PARMS(,%sp)
 	lea	%s4, ffi_closure_OFS_RVALUE(,%sp)	# pre-tramp ret addr
 	ld	%lr, ffi_closure_OFS_RETADDR(,%sp)	# rvalue mem ptr
+ffi_cl_rvalue2:
 # Following branch turned out not useful for VE
 #	ld	%s5, ffi_closure_OFS_RETADDR+0x08(,%sp) # 0/1: REFERENCE rvalue?
 #	breq.l.t	%s5,0,.L_closure_REGISTER
@@ -803,29 +816,51 @@ ffi_closure_ve:
 #	# TODO
 #
 #.L_closure_REGISTER: # rvalue could be up to long double complex (4 registers)
-	brne.w.t	FFI_TYPE_FLOAT,%s6, .L_cl_notFLOAT
-	ffi_cl_rFLOAT:
-	ldu	%s0, ffi_closure_OFS_RVALUE+0x00(,%sp)
-	br.w	.L_closure_ret
-.L_cl_notFLOAT:
-	brne.w.t	FFI_TYPE_LONGDOUBLE,%s6, .L_cl_notLDOUBLE
-	ffi_cl_rSwap01: /* %s0 <---> higher mem address */
-	ld	%s0, ffi_closure_OFS_RVALUE+0x08(,%sp)
+	breq.w.nt	FFI_TYPE_FLOAT,%s6, ffi_cl_rF0
+	#brne.w.t	FFI_TYPE_FLOAT,%s6, .L_cl_notFLOAT
+	#ffi_cl_rFLOAT:
+	#ldu	%s0, ffi_closure_OFS_RVALUE+0x00(,%sp)
+	#br.w	.L_closure_ret
+	#.L_cl_notFLOAT:
+	breq.w.nt	FFI_TYPE_LONGDOUBLE,%s6, ffi_cl_rSwap01
+	brne.w.t	FFI_TYPE_COMPLEX,%s6, .L_cl_notCOMPLEX
+ffi_cl_rcomplex:
+	breq.l.nt	8, %s7 ,ffi_cl_rF01_packed
+	#brne.l.nt	8, %s7 ,.L_cl_notFLOATCOMPLEX
+	#ldu	%s0, ffi_closure_OFS_RVALUE+0x00(,%sp)
+	#ldu	%s1, ffi_closure_OFS_RVALUE+0x04(,%sp)
+	#br.w	.L_closure_ret
+	.L_cl_notFLOATCOMPLEX:
+	breq.l.t	16, %s7 ,ffi_cl_r01
+	br.w	ffi_cl_r0123
+
+	.L_cl_notCOMPLEX:
+	br.w	ffi_cl_r0123
+
+ffi_cl_rSwap01: /* %s0 <---> higher mem address */
+	ld	%s0, ffi_closure_OFS_RVALUE+0x08(,%sp)	# SWAP 0<->1
 	ld	%s1, ffi_closure_OFS_RVALUE+0x00(,%sp)
 	br.w	.L_closure_ret
-.L_cl_notLDOUBLE:
-	ld	%s0, ffi_closure_OFS_RVALUE+0x00(,%sp)
-	ld	%s1, ffi_closure_OFS_RVALUE+0x08(,%sp)
-	ld	%s2, ffi_closure_OFS_RVALUE+0x10(,%sp)
-	ld	%s3, ffi_closure_OFS_RVALUE+0x18(,%sp)
+ffi_cl_rF01_packed:
+	ldu	%s1, ffi_closure_OFS_RVALUE+0x04(,%sp)
+ffi_cl_rF0:
+	ldu	%s0, ffi_closure_OFS_RVALUE+0x00(,%sp)
+	br.w	.L_closure_ret
 	# rvalue processing (return value ---> registers, maybe)
 	#   MAYBE bump up %sp early so we can "b.l (,%lr)"
 	#         instead of "br.w .L_closure_ret"
-
+ffi_cl_r0123:
+	ld	%s3, ffi_closure_OFS_RVALUE+0x18(,%sp)
+	ld	%s2, ffi_closure_OFS_RVALUE+0x10(,%sp)
+ffi_cl_r01:
+	ld	%s1, ffi_closure_OFS_RVALUE+0x08(,%sp)
+ffi_cl_r0:
+	ld	%s0, ffi_closure_OFS_RVALUE+0x00(,%sp)
 .L_closure_ret:
 	ld	%lr, ffi_closure_OFS_RETADDR(,%sp)	# pre-tramp ret addr
 	lea	%sp, ffi_closure_ALLOCA(,%sp)		# remove alloca space
 	b.l	(,%lr)					# return (pre-tramp)
+	.cfi_endproc
 	.size	ffi_closure_ve, . - ffi_closure_ve
 
 ffi_closure_vexx:
@@ -837,12 +872,14 @@ ffi_closure_vexx:
 	.cfi_offset	9,0		# %fp is %s9
 	st	%lr,0x8(,%sp)		# %lr~%s10 Link Reg: ret addr
 	;				# skip %tp at 0x10(,%sp)
-	#st	%got,0x18(,%sp)
-	#st	%plt,0x20(,%sp)
-	#lea	%got,_GLOBAL_OFFSET_TABLE_@PC_LO(-24) 	#-0x18
-	#and	%got,%got,(32)0
-	#sic	%plt			# %plt := IC + 8
-	#lea.sl	%got,_GLOBAL_OFFSET_TABLE_@PC_HI(%plt,%got)
+	st	%got,0x18(,%sp)
+	st	%plt,0x20(,%sp)
+#ifdef PIC
+	lea	%got,_GLOBAL_OFFSET_TABLE_@PC_LO(-24) 	#-0x18
+	and	%got,%got,(32)0
+	sic	%plt			# %plt := IC + 8
+	lea.sl	%got,_GLOBAL_OFFSET_TABLE_@PC_HI(%plt,%got)
+#endif
 	or	%fp,0,%sp		# %fp := %sp
 	
 	#.cfi_def_cfa_register	9	# %s9 is the frame points
@@ -868,10 +905,10 @@ ffi_closure_vexx:
 	;# Remove the space we pushed for the args
 	or	%sp,0,%fp	# callee stack frame -> Gone!
 	#.cfi_def_cfa	11,8
-	#ld	%got,0x18(,%sp)
-	#ld	%plt,0x20(,%sp)
-	#ld	%lr, 0x8(,%sp)
-	# ld	%fp, 0x0(,%sp)
+	ld	%got,0x18(,%sp)
+	ld	%plt,0x20(,%sp)
+	ld	%lr, 0x8(,%sp)
+	ld	%fp, 0x0(,%sp)
 	b.l	(,%lr)
 .L_fEoE: #end of epilogue
 	.cfi_endproc

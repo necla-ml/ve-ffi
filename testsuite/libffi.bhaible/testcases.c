@@ -409,11 +409,11 @@ float complex fq_ffqx5 (float a, float complex b,
 {
   float complex r=a+b+c+d+e+f+g+h+i+j;
   fprintf(out,"float complex f(5*(float,float complex)):(%g,%g+%g*I,%g,%g+%g*I,%g,%g+%g*I,%g,%g+%g*I,%g,%g+%g*I)",
-		  (double)a,(double)crealf(b),(double)crealf(b),
-		  (double)c,(double)crealf(d),(double)crealf(d),
-		  (double)e,(double)crealf(f),(double)crealf(f),
-		  (double)g,(double)crealf(h),(double)crealf(h),
-		  (double)i,(double)crealf(j),(double)crealf(j));
+		  (double)a,(double)crealf(b),(double)cimagf(b),
+		  (double)c,(double)crealf(d),(double)cimagf(d),
+		  (double)e,(double)crealf(f),(double)cimagf(f),
+		  (double)g,(double)crealf(h),(double)cimagf(h),
+		  (double)i,(double)crealf(j),(double)cimagf(j));
   fflush(out);
   return r;
 }
@@ -626,7 +626,27 @@ void* vp_vpdpcpsp (void* a, double* b, char* c, Int* d)
   fflush(out);
   return ret;
 }
-
+ulong ul_cp3 (char /*const*/ * a, char /*const*/ * b, char /*const*/ * c){
+  ulong ret=0UL;
+  int i;
+  char *x;
+  char buf[80];
+  i = snprintf(&buf[0],80,"\"%s\",\"%s\",\"%s\"",a,b,c);
+  if( i<0 || i>=80 ) goto oops;
+  fprintf(out,"ulong ul_cp3(%s)",&buf[0]);
+  for(x=a,i=0; *x!='\0'; ++x){
+    if(++i > 20) goto oops; else ret += i*(ulong)*x;
+  }
+  for(x=b,i=0; *x!='\0'; ++x){
+    if(++i > 20) goto oops; else ret += i*(ulong)*x;
+  }
+  for(x=c,i=0; *x!='\0'; ++x){
+    if(++i > 20) goto oops; else ret += i*(ulong)*x;
+  }
+  goto ok;
+oops: ret=13UL;
+ok: return ret;
+}
 /* mixed number tests */
 uchar uc_ucsil (uchar a, ushort b, uint c, ulong d)
 {
@@ -1098,3 +1118,4 @@ double d_l7d (long a1, long a2, long a3, long a4, long a5, long a6, long a7, dou
   fflush(out);
   return r;
 }
+/* vim: set sw=2 ts=2 et: */

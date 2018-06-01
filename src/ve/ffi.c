@@ -50,6 +50,10 @@
 #define NGREGARG 8
 //#define NFREGARG 12
 
+UINT64 howto_srl(UINT64 x){
+    return x >> 8;
+}
+
 void print_s0(UINT64 s0){
     debug(2, " print_s0: %lu = %ld = 0x%lx ", (long unsigned)s0,
             (long int)s0, (long unsigned)s0);
@@ -1121,6 +1125,7 @@ ffi_status ffi_prep_cif_machdep(ffi_cif *cif)
             cif->flags = cif->rtype->type; /* ?? */
             break;
     }
+    FFI_ASSERT( cif->flags == cif->rtype->type );
 
     debug(4," [reg area 64 b]:cif_bytes=%u",(unsigned)cif->bytes);
     cif->bytes += 64; /* ALWAYS provide a register area (fixed size, for now) */
@@ -1492,12 +1497,8 @@ ffi_closure_inner(ffi_cif *cif,
         if( type->type != FFI_TYPE_STRUCT ){
             n = (z + UNITS_PER_WORD - 1) / UNITS_PER_WORD;
         }
-        debug(2," i%dsz%lun%ug%d",(int)i,(unsigned long)z,(unsigned)n,(int)gprcount);
-        // Some long scalars must begin on even-numbered reg
-        if( n > 1 ){
-            gprcount += (gprcount & 1);
-            debug(2,"%s","++g");
-        }
+        debug(2," i%dsz%lun%ug%dt%d",(int)i,(unsigned long)z,(unsigned)n,
+                (int)gprcount,(int)type->type);
         if (n == 0 ){ // ve struct passed as ptr, which can be in reg
             //printf(" n==0 "); fflush(stdout);
             FFI_ASSERT( argclass(type) == VE_REFERENCE );
@@ -1552,6 +1553,44 @@ ffi_closure_inner(ffi_cif *cif,
 #endif
             }
             debug(2,"%s","\n");
+        }else if(type->type == FFI_TYPE_COMPLEX){ /* {float/double/long double} complex */
+            /* VE passes complex as though they were two separate REGISTER scalars */
+            UINT64 *pre, *pim;
+            n >>= 1;    /* 1|2|4 becomes 0|1|2 */
+            FFI_ASSERT(n==0 || n==1 || n==2 );
+            int const gbump = (n<=1? 1: 2);
+            int const abump = gbump*8;
+            if( n==0 ){ /* 2 packed floats, passed as 2 separate REGISTER args */
+                if(gprcount < NGREGARG) { pre = &reg_args->gpr[gprcount]; gprcount+=gbump; }
+                else                    { pre = (UINT64*)argp; argp+=abump; }
+                if(gprcount < NGREGARG) { pim = &reg_args->gpr[gprcount]; gprcount+=gbump; }
+                else                    { pim = (UINT64*)argp; argp+=abump; }
+                *pre = (*pim & 0xffffFFFF00000000UL) | (*pre >> 32);
+                avalue[i] = (void*)pre;
+            }else if( n==1 ){
+                if(gprcount < NGREGARG) { pre = &reg_args->gpr[gprcount]; gprcount+=1; }
+                else                    { pre = (UINT64*)argp; argp+=8; }
+                if(gprcount < NGREGARG) { pim = &reg_args->gpr[gprcount]; gprcount+=1; }
+                else                    { pim = (UINT64*)argp; argp+=8; }
+                // these must occupy consecutive memory locations
+                // (no problem if reg_args memory is directly before argp area)
+                if(pim != pre + 1){
+                    FFI_ASSERT("TBD: split double complex args --> single mem region"==NULL);
+                }
+                avalue[i] = (void*)pre;
+            }else{
+                FFI_ASSERT( n==2 && type->size==32 );
+                gprcount += (gprcount & 1);
+                if(gprcount<NGREGARG){pre = &reg_args->gpr[gprcount]; gprcount+=2;}
+                else                 {pre = (UINT64*)argp; argp+=16;}
+                if(gprcount<NGREGARG){pim = &reg_args->gpr[gprcount]; gprcount+=2;}
+                else                 {pim =(UINT64*) argp; argp+=16;}
+                // these must occupy consecutive memory locations
+                if(pim != pre + 1){
+                    FFI_ASSERT("TBD: split longdouble complex args --> single mem region"==NULL);
+                }
+                avalue[i] = (void*)pre;
+            }
         }else if (gprcount + n > NGREGARG){
             // IF n==0 ALLOCA ???
             /* Stack args *always* at least 8 byte aligned. */
@@ -1574,20 +1613,32 @@ ffi_closure_inner(ffi_cif *cif,
             argp += z; // ok for struct?
             debug(2," -->argp%d", (int)(argp-argp0));
             debug(2,"%s","\n");
-        }else if (n == 1) { /* The argument is in a single register. */
+        }else if (n == 1) { /* The argument might use a single register. */
             /* we can use arg address directly. */
             // NO FFI_ASSERT( align >= 8 );
             avalue[i] = &reg_args->gpr[gprcount];
             if(type->type == FFI_TYPE_FLOAT){
-                /* swap up/lo halves */
-                UINT64 i = reg_args->gpr[gprcount];
-                i >>= 32;
-                reg_args->gpr[gprcount] = i;
+                /* swap float from MSBs to LSBs */
+                reg_args->gpr[gprcount] >>= 32;
                 debug(2," flt%d=%f",(int)gprcount,
                         *(float*)(&reg_args->gpr[gprcount]));
                 debug(2," flt%d'=%f",(int)gprcount,
                         *((float*)(&reg_args->gpr[gprcount])+1));
             }
+#if 0
+            if(type->type == FFI_TYPE_COMPLEX){ /* float complex */
+                /* sz8a4 memory from two registers */
+                float re = *((float*)(&reg_args->gpr[gprcount])+1);
+                float im = *((float*)(&reg_args->gpr[gprcount+1])+1); /* maybe */
+                debug(2," fq%d.real=%g",(int)gprcount, re );
+                debug(2," fq%d.imag=%g",(int)gprcount, im );
+                reg_args->gpr[gprcount] =
+                    (reg_args->gpr[gprcount+1] & 0xffffFFFF00000000UL)
+                    | (reg_args->gpr[gprcount] >> 32)
+                    ;
+                ++gprcount;             /* an extra bump */
+            }
+#endif
             debug(2," a%ds%d&R[%d]=0x%lx\n", align, (int)z, gprcount,
                     &reg_args->gpr[gprcount]);
             gprcount += n;
@@ -1595,6 +1646,9 @@ ffi_closure_inner(ffi_cif *cif,
             /* n==2 or 4? we can use arg address directly. */
             FFI_ASSERT( align >= 8 );
             FFI_ASSERT( n==2 || n==4 );
+            // Some long scalars must begin on even-numbered reg
+            gprcount += (gprcount & 1);
+            debug(2,"%s","++g");
 #if 0
             // On VE regargs can always be alloa'ed? Why this?
             char *a = alloca (n*8);
@@ -1619,11 +1673,19 @@ ffi_closure_inner(ffi_cif *cif,
         }
     }
 
+    /* Tell assembly how to perform return type promotions.  */
+    /*debug(2, "_inner flags=rtype?=%d\n",flags);*/
+    FFI_ASSERT( cif->flags == cif->rtype->type );
+    if( cif->rtype->type == FFI_TYPE_COMPLEX ){
+        int rsz = cif->rtype->size;
+        debug(2," COMPLEX sz=%d flags=0x%lx",rsz,(UINT64)flags);
+        flags |= (cif->rtype->size << 8); /* 8,16,32 */
+        debug(2," -> 0x%lx\n",(UINT64)flags);
+    }
     /* Invoke the closure.  */
     fun (cif, rvalue, avalue, user_data);
 
-    /* Tell assembly how to perform return type promotions.  */
-    /*debug(2, "_inner flags=rtype?=%d\n",flags);*/
+
     return flags;
 }
 

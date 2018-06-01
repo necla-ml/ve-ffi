@@ -353,7 +353,7 @@ void d_d16_simulator (ffi_cif* cif, void* retp, /*const*/ void* /*const*/ *args,
 }}
 
 #if HAVE_LONG_DOUBLE
-/* long long double tests */
+/* long double tests */
 void ld_ld_simulator (ffi_cif* cif, void* retp, /*const*/ void* /*const*/ *args, void* data)
 {
   if (data != (void*)&ld_ld) { fprintf(out,"wrong data for ld_ld\n"); exit(1); }
@@ -444,6 +444,110 @@ void ld_ld16_simulator (ffi_cif* cif, void* retp, /*const*/ void* /*const*/ *arg
   *(long double*)retp = r;
 }}
 #endif // HAVE_LONG_DOUBLE
+#if HAVE_COMPLEX
+#if 1
+/* float complex tests */
+void fq_fq_simulator (ffi_cif* cif, void* retp, /*const*/ void* /*const*/ *args, void* data)
+{
+  if (data != (void*)&fq_fq) { fprintf(out,"wrong data for fq_fq\n"); exit(1); }
+ {float complex a = *(float complex*)(*args++);
+  float complex r=a+1.0;
+  FPRINTF(out,"float complex f(float complex):(%g+%g*I)",(double)crealf(a),(double)cimagf(a));
+  fflush(out);
+  *(float complex*)retp = r;
+}}
+void fq_fq2_simulator (ffi_cif* cif, void* retp, /*const*/ void* /*const*/ *args, void* data)
+{
+  if (data != (void*)&fq_fq2) { fprintf(out,"wrong data for fq_fq2\n"); exit(1); }
+ {float complex a = *(float complex*)(*args++);
+  float complex b = *(float complex*)(*args++);
+  float complex r=a+b;
+  FPRINTF(out,"float complex f(2*float complex):(%g+%g*I,%g+%g*I)",(double)crealf(a),(double)cimagf(a),(double)crealf(b),(double)cimagf(b));
+  fflush(out);
+  *(float complex*)retp = r;
+}}
+void fq_ffq_simulator (ffi_cif* cif, void* retp, /*const*/ void* /*const*/ *args, void* data)
+{
+  if (data != (void*)&fq_ffq) { fprintf(out,"wrong data for fq_fq2\n"); exit(1); }
+ {float a = *(float*)(*args++);
+  float complex b = *(float complex*)(*args++);
+  float complex r=a+b;
+  FPRINTF(out,"float complex f(float, float complex):(%g,%g+%g*I)",(double)a,(double)crealf(b),(double)cimagf(b));
+  fflush(out);
+  *(float complex*)retp = r;
+}}
+void fq_fq4_simulator (ffi_cif* cif, void* retp, /*const*/ void* /*const*/ *args, void* data)
+{
+  if (data != (void*)&fq_fq4) { fprintf(out,"wrong data for fq_fq4\n"); exit(1); }
+ {float complex a = *(float complex*)(*args++);
+  float complex b = *(float complex*)(*args++);
+  float complex c = *(float complex*)(*args++);
+  float complex d = *(float complex*)(*args++);
+  float complex r=a+b+c+d;
+  FPRINTF(out,"float complex f(4*float complex):(%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I)",(double)crealf(a),(double)cimagf(a),(double)crealf(b),(double)cimagf(b),(double)crealf(c),(double)cimagf(c),(double)crealf(d),(double)cimagf(d));
+  fflush(out);
+  *(float complex*)retp = r;
+}}
+void fq_fq8_simulator (ffi_cif* cif, void* retp, /*const*/ void* /*const*/ *args, void* data)
+{
+  if (data != (void*)&fq_fq8) { fprintf(out,"wrong data for fq_fq8\n"); exit(1); }
+ {float complex a = *(float complex*)(*args++);
+  float complex b = *(float complex*)(*args++);
+  float complex c = *(float complex*)(*args++);
+  float complex d = *(float complex*)(*args++);
+  float complex e = *(float complex*)(*args++);
+  float complex f = *(float complex*)(*args++);
+  float complex g = *(float complex*)(*args++);
+  float complex h = *(float complex*)(*args++);
+  float complex r=a+b+c+d+e+f+g+h;
+  FPRINTF(out,"float complex f(8*float complex):(%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I)",(double)crealf(a),(double)cimagf(a),(double)crealf(b),(double)cimagf(b),(double)crealf(c),(double)cimagf(c),(double)crealf(d),(double)cimagf(d),(double)crealf(e),(double)cimagf(e),(double)crealf(f),(double)cimagf(f),(double)crealf(g),(double)cimagf(g),(double)crealf(h),(double)cimagf(h));
+  fflush(out);
+  *(float complex*)retp = r;
+}}
+void fq_ffqx5_simulator (ffi_cif* cif, void* retp, /*const*/ void* /*const*/ *args, void* data)
+{
+  if (data != (void*)&fq_ffqx5) { fprintf(out,"wrong data for fq_ffqx5\n"); exit(1); }
+ {float a = *(float*)(*args++);
+  float complex b = *(float complex*)(*args++);
+  float c = *(float*)(*args++);
+  float complex d = *(float complex*)(*args++);
+  float e = *(float*)(*args++);
+  float complex f = *(float complex*)(*args++);
+  float g = *(float*)(*args++);
+  float complex h = *(float complex*)(*args++);
+  float i = *(float*)(*args++);
+  float complex j = *(float complex*)(*args++);
+  float complex r=a+b+c+d+e+f+g+h+i+j;
+  FPRINTF(out,"float complex f(5*(float,float complex)):(%g,%g+%g*I,%g,%g+%g*I,%g,%g+%g*I,%g,%g+%g*I,%g,%g+%g*I)",(double)a,(double)crealf(b),(double)cimagf(b),(double)c,(double)crealf(d),(double)cimagf(d),(double)e,(double)crealf(f),(double)cimagf(f),(double)g,(double)crealf(h),(double)cimagf(h),(double)i,(double)crealf(j),(double)cimagf(j));
+  fflush(out);
+  *(float complex*)retp = r;
+}}
+void fq_fq16_simulator (ffi_cif* cif, void* retp, /*const*/ void* /*const*/ *args, void* data)
+{
+  if (data != (void*)&fq_fq16) { fprintf(out,"wrong data for fq_fq16\n"); exit(1); }
+ {float complex a = *(float complex*)(*args++);
+  float complex b = *(float complex*)(*args++);
+  float complex c = *(float complex*)(*args++);
+  float complex d = *(float complex*)(*args++);
+  float complex e = *(float complex*)(*args++);
+  float complex f = *(float complex*)(*args++);
+  float complex g = *(float complex*)(*args++);
+  float complex h = *(float complex*)(*args++);
+  float complex i = *(float complex*)(*args++);
+  float complex j = *(float complex*)(*args++);
+  float complex k = *(float complex*)(*args++);
+  float complex l = *(float complex*)(*args++);
+  float complex m = *(float complex*)(*args++);
+  float complex n = *(float complex*)(*args++);
+  float complex o = *(float complex*)(*args++);
+  float complex p = *(float complex*)(*args++);
+  float complex r=a+b+c+d+e+f+g+h+i+j+k+l+m+n+o+p;
+  FPRINTF(out,"float complex f(16*float complex):(%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I,%g+%g*I)",(double)crealf(a),(double)cimagf(a),(double)crealf(b),(double)cimagf(b),(double)crealf(c),(double)cimagf(c),(double)crealf(d),(double)cimagf(d),(double)crealf(e),(double)cimagf(e),(double)crealf(f),(double)cimagf(f),(double)crealf(g),(double)cimagf(g),(double)crealf(h),(double)cimagf(h),(double)crealf(i),(double)cimagf(i),(double)crealf(j),(double)cimagf(j),(double)crealf(k),(double)cimagf(k),(double)crealf(l),(double)cimagf(l),(double)crealf(m),(double)cimagf(m),(double)crealf(n),(double)cimagf(n),(double)crealf(o),(double)cimagf(o),(double)crealf(p),(double)cimagf(p));
+  fflush(out);
+  *(float complex*)retp = r;
+}}
+#endif
+#endif // HAVE_COMPLEX
 
 /* pointer tests */
 void vp_vpdpcpsp_simulator (ffi_cif* cif, void* retp, /*const*/ void* /*const*/ *args, void* data)
@@ -1686,7 +1790,7 @@ int main (void)
   }
 
 #if HAVE_LONG_DOUBLE
-  /* double tests */
+  /* long double tests */
   { long double ldr;
 
 #if (!defined(DGTEST)) || DGTEST == 14
@@ -1801,6 +1905,141 @@ int main (void)
 #endif
   }
 #endif // HAVE_LONG_DOUBLE
+
+#if HAVE_COMPLEX
+#if 1 /* float complex */
+  /* float complex tests */
+  { float complex fqr;
+
+#if (!defined(DGTEST)) || DGTEST == 14
+    fqr = fq_fq(fq1);
+    fprintf(out,"->%g+%g*I\n",(double)crealf(fqr),(double)cimagf(fqr));
+    fflush(out);
+    fqr = 0.0; clear_traces();
+    ALLOC_CALLBACK();
+    {
+      ffi_type* argtypes[] = { &ffi_type_complex_float };
+      ffi_cif cif;
+      FFI_PREP_CIF(cif,argtypes,ffi_type_complex_float);
+      PREP_CALLBACK(cif,fq_fq_simulator,(void*)&fq_fq);
+      fqr = ((float complex (*) (float complex)) callback_code) (fq1);
+    }
+    FREE_CALLBACK();
+    FPRINTF(out,"->%g+%g*I\n",(double)crealf(fqr),(double)cimagf(fqr));
+    fflush(out);
+#endif
+
+#if (!defined(DGTEST)) || DGTEST == 15    
+    fqr = fq_fq2(fq1,fq2);
+    fprintf(out,"->%g+%g*I\n",(double)crealf(fqr),(double)cimagf(fqr));
+    fflush(out);
+    fqr = 0.0; clear_traces();
+    ALLOC_CALLBACK();
+    {
+      ffi_type* argtypes[] = { &ffi_type_complex_float, &ffi_type_complex_float };
+      ffi_cif cif;
+      FFI_PREP_CIF(cif,argtypes,ffi_type_complex_float);
+      PREP_CALLBACK(cif,fq_fq2_simulator,(void*)&fq_fq2);
+      fqr = ((float complex (*) (float complex,float complex)) callback_code) (fq1,fq2);
+    }
+    FREE_CALLBACK();
+    FPRINTF(out,"->%g+%g*I\n",(double)crealf(fqr),(double)cimagf(fqr));
+    fflush(out);
+    /* */
+    fqr = fq_ffq(f1,fq2);
+    fprintf(out,"->%g+%g*I\n",(double)crealf(fqr),(double)cimagf(fqr));
+    fflush(out);
+    fqr = 0.0; clear_traces();
+    ALLOC_CALLBACK();
+    {
+      ffi_type* argtypes[] = { &ffi_type_float, &ffi_type_complex_float };
+      ffi_cif cif;
+      FFI_PREP_CIF(cif,argtypes,ffi_type_complex_float);
+      PREP_CALLBACK(cif,fq_ffq_simulator,(void*)&fq_ffq);
+      fqr = ((float complex (*) (float,float complex)) callback_code) (f1,fq2);
+    }
+    FREE_CALLBACK();
+    FPRINTF(out,"->%g+%g*I\n",(double)crealf(fqr),(double)cimagf(fqr));
+    fflush(out);
+#endif
+  
+#if (!defined(DGTEST)) || DGTEST == 16    
+    fqr = fq_fq4(fq1,fq2,fq3,fq4);
+    fprintf(out,"->%g+%g*I\n",(double)crealf(fqr),(double)cimagf(fqr));
+    fflush(out);
+    fqr = 0.0; clear_traces();
+    ALLOC_CALLBACK();
+    {
+      ffi_type* argtypes[] = { &ffi_type_complex_float, &ffi_type_complex_float, &ffi_type_complex_float, &ffi_type_complex_float };
+      ffi_cif cif;
+      FFI_PREP_CIF(cif,argtypes,ffi_type_complex_float);
+      PREP_CALLBACK(cif,fq_fq4_simulator,(void*)&fq_fq4);
+      fqr = ((float complex (*) (float complex,float complex,float complex,float complex)) callback_code) (fq1,fq2,fq3,fq4);
+    }
+    FREE_CALLBACK();
+    FPRINTF(out,"->%g+%g*I\n",(double)crealf(fqr),(double)cimagf(fqr));
+    fflush(out);
+#endif
+
+#if (!defined(DGTEST)) || DGTEST == 17    
+    fqr = fq_fq8(fq1,fq2,fq3,fq4,fq5,fq6,fq7,fq8);
+    fprintf(out,"->%g+%g*I\n",(double)crealf(fqr),(double)cimagf(fqr));
+    fflush(out);
+    fqr = 0.0; clear_traces();
+    ALLOC_CALLBACK();
+    {
+      ffi_type* argtypes[] = { &ffi_type_complex_float, &ffi_type_complex_float, &ffi_type_complex_float, &ffi_type_complex_float, &ffi_type_complex_float, &ffi_type_complex_float, &ffi_type_complex_float, &ffi_type_complex_float };
+      ffi_cif cif;
+      FFI_PREP_CIF(cif,argtypes,ffi_type_complex_float);
+      PREP_CALLBACK(cif,fq_fq8_simulator,(void*)&fq_fq8);
+      fqr = ((float complex (*) (float complex,float complex,float complex,float complex,float complex,float complex,float complex,float complex)) callback_code) (fq1,fq2,fq3,fq4,fq5,fq6,fq7,fq8);
+    }
+    FREE_CALLBACK();
+    FPRINTF(out,"->%g+%g*I\n",(double)crealf(fqr),(double)cimagf(fqr));
+    fflush(out);
+    /* */
+    fqr = fq_ffqx5(f1,fq1,f2,fq2,f3,fq3,f4,fq4,f5,fq5);
+    fprintf(out,"->%g+%g*I\n",(double)crealf(fqr),(double)cimagf(fqr));
+    fflush(out);
+    fqr = 0.0; clear_traces();
+    ALLOC_CALLBACK();
+    {
+      ffi_type* argtypes[] = {
+	      &ffi_type_float, &ffi_type_complex_float,
+	      &ffi_type_float, &ffi_type_complex_float,
+	      &ffi_type_float, &ffi_type_complex_float,
+	      &ffi_type_float, &ffi_type_complex_float,
+	      &ffi_type_float, &ffi_type_complex_float };
+      ffi_cif cif;
+      FFI_PREP_CIF(cif,argtypes,ffi_type_complex_float);
+      PREP_CALLBACK(cif,fq_ffqx5_simulator,(void*)&fq_ffqx5);
+      fqr = ((float complex (*) (float,float complex, float,float complex, float,float complex, float,float complex, float,float complex)) callback_code) (f1,fq1,f2,fq2,f3,fq3,f4,fq4,f5,fq5);
+    }
+    FREE_CALLBACK();
+    FPRINTF(out,"->%g+%g*I\n",(double)crealf(fqr),(double)cimagf(fqr));
+    fflush(out);
+#endif
+
+#if (!defined(DGTEST)) || DGTEST == 18
+    fqr = fq_fq16(fq1,fq2,fq3,fq4,fq5,fq6,fq7,fq8,fq9,fq10,fq11,fq12,fq13,fq14,fq15,fq16);
+    fprintf(out,"->%g+%g*I\n",(double)crealf(fqr),(double)cimagf(fqr));
+    fflush(out);
+    fqr = 0.0; clear_traces();
+    ALLOC_CALLBACK();
+    {
+      ffi_type* argtypes[] = { &ffi_type_complex_float, &ffi_type_complex_float, &ffi_type_complex_float, &ffi_type_complex_float, &ffi_type_complex_float, &ffi_type_complex_float, &ffi_type_complex_float, &ffi_type_complex_float, &ffi_type_complex_float, &ffi_type_complex_float, &ffi_type_complex_float, &ffi_type_complex_float, &ffi_type_complex_float, &ffi_type_complex_float, &ffi_type_complex_float, &ffi_type_complex_float };
+      ffi_cif cif;
+      FFI_PREP_CIF(cif,argtypes,ffi_type_complex_float);
+      PREP_CALLBACK(cif,fq_fq16_simulator,(void*)&fq_fq16);
+      fqr = ((float complex (*) (float complex,float complex,float complex,float complex,float complex,float complex,float complex,float complex,float complex,float complex,float complex,float complex,float complex,float complex,float complex,float complex)) callback_code) (fq1,fq2,fq3,fq4,fq5,fq6,fq7,fq8,fq9,fq10,fq11,fq12,fq13,fq14,fq15,fq16);
+    }
+    FREE_CALLBACK();
+    FPRINTF(out,"->%g+%g*I\n",(double)crealf(fqr),(double)cimagf(fqr));
+    fflush(out);
+#endif
+  }
+#endif /* float complex */
+#endif // HAVE_COMPLEX
 
   /* pointer tests */
   { void* vpr;
@@ -3088,4 +3327,4 @@ int main (void)
   fflush(stdout);  
   exit(0);
 }
-
+/* vim: set sw=2 ts=2 et: */
