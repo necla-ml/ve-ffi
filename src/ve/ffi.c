@@ -62,6 +62,7 @@
 #endif
 #endif
 
+void foo() {;}
 UINT64 howto_srl(UINT64 x){
     return x >> 8;
 }
@@ -303,8 +304,8 @@ static char const* ffi_type_detail( ffi_type const* const t, unsigned argpos, un
         else { buf+=n; rem_len-=n; } \
     } while(0)
     DPRINT("%s(s%llu,a%u)%s", ffi_type_str(t), (unsigned long long)t->size
-            , (unsigned)t->alignment, (argpos<nfixedargs?
-                argclass_names[argclass(t)]: "BOTH"));
+            , (unsigned)t->alignment,
+            (argpos < nfixedargs? argclass_names[argclass(t)]: "BOTH"));
     return &buf_type[0];
 #undef DPRINT
 }
@@ -330,7 +331,7 @@ static char const* ffi_cif_str( ffi_cif const* cif){
     }
     DPRINT("\n\t\t, rtype=");
     if(cif->rtype==NULL) DPRINT("NULL");
-    else DPRINT("%p[%s]", (void*)cif->rtype, ffi_type_detail(cif->rtype,0,0));
+    else DPRINT("%p[%s]", (void*)cif->rtype, ffi_type_detail(cif->rtype,0U,1U));
     DPRINT(", bytes:%u, flags:%u"
 #if defined(FFI_EXTRA_CIF_FIELDS)
             //" [,extra]"
@@ -909,6 +910,9 @@ ffi_status ffi_prep_cif_machdep(ffi_cif *cif)
     //int j=0;
     //int m;
     cif->flags2 = 0UL;
+    /* arg# < this ==> "normal" register/mem decision */
+    /* arg# > nfixeedargs ==> "BOTH" treatment (in reg AND in reg-mirror arg area) */
+    cif->nfixedargs = (unsigned) -1;
 #endif
 
     //debug(2, "BASE mask is %lx\n", (unsigned)FFI_TYPE_MASK);
@@ -1143,9 +1147,6 @@ ffi_status ffi_prep_cif_machdep(ffi_cif *cif)
     cif->bytes = FFI_ALIGN( cif->bytes, 16 );
     debug(4,"-->[align16]%u",(unsigned)cif->bytes);
 
-    /* arg# < this ==> "normal" register/mem decision */
-    /* arg# > nfixeedargs ==> "BOTH" treatment (in reg AND in reg-mirror arg area) */
-    cif->nfixedargs = (unsigned) -1;
     debug(2,"ve: ffi_prep_cif_machdep(ffi_cif*) %s (cif->bytes=%lu)\n      %s\n",
             "ENDS", (unsigned long)cif->bytes, ffi_cif_str(cif));
     return FFI_OK;
@@ -1285,7 +1286,7 @@ void ffi_call(/*@dependent@*/ ffi_cif *cif,
                     ecif.rvalue, fn);
 #endif
             debug(3,"\n  rvalue[%s] : %p --> %s",
-                    ffi_type_detail(cif->rtype,0,0),
+                    ffi_type_detail(cif->rtype,0U,1U),
                     (void*)ecif.rvalue,
                     ffi_avalue_str(cif->rtype,ecif.rvalue));
             break;
@@ -1471,9 +1472,23 @@ ffi_closure_inner(ffi_cif *cif,
     //         directly with the non-reg argp.  Easier to deal with
     //         contiguours reg and non-reg memory [avoid split arg issues]
     FFI_ASSERT( sizeof(struct register_args) == 8*8 );
-    memcpy( argp, &reg_args, sizeof(struct register_args) );
+    debug(2, " reg_args@%p:\n", &reg_args->gpr[0]);
+    for(unsigned i=0U; i<8U; i+=4U){
+        debug(2," 0x%08lx 0x%08lx 0x%08lx 0x%08lx\n",
+                reg_args->gpr[i+0], reg_args->gpr[i+1],
+                reg_args->gpr[i+2], reg_args->gpr[i+3]);
+    }
+    debug(2, "\nargp0@%p:\n",(void const*)argp0);
+    for(unsigned i=0U; i<16U; i+=4U){
+        debug(2," 0x%08lx 0x%08lx 0x%08lx 0x%08lx\n",
+                *(UINT64*)(argp+i*32+ 0), *(UINT64*)(argp+i*32+ 8),
+                *(UINT64*)(argp+i*32+16), *(UINT64*)(argp+i*32+24));
+    }
+    debug(2,"\n");
+    memcpy( argp, &reg_args->gpr[0], sizeof(struct register_args) );
     // DESTROY the original args pointer (it can be re-used for ret-val processing)
     reg_args = (struct register_args*)(void*)argp;
+
     //argp += sizeof(struct register_args);
     // Now our avalues memory looks like [ register args | non-register args ]
     // and we can point into this area WITH objects extending naturally past
@@ -1524,8 +1539,10 @@ ffi_closure_inner(ffi_cif *cif,
         }
         debug(2," i%dsz%lun%ug%dt%d",(int)i,(unsigned long)z,(unsigned)n,
                 (int)gprcount,(int)type->type);
+        fflush(stdout);
+        foo(); /* breakpoint */
         if (n == 0 ){ // ve struct passed as ptr, which can be in reg
-            //printf(" n==0 "); fflush(stdout);
+            printf(" n==0 "); fflush(stdout);
             FFI_ASSERT( argclass(type) == VE_REFERENCE );
             //if (align < 8){ align = 8; }
             //argp = (void *) FFI_ALIGN (argp, align);
@@ -1543,7 +1560,7 @@ ffi_closure_inner(ffi_cif *cif,
                     (long)&reg_args->gpr[gprcount]);
                 //int* pint = *(int*)avalue[i];
                 //debug(2," *%d", pint[0]);
-                ++gprcount;
+                ++gprcount; argp += 8;
             }else{
                 argp = (void *) FFI_ALIGN (argp, 8); // alignment of void*
                 debug(2," argp%d=%p",(int)(argp-argp0),(void*)argp);
@@ -1556,6 +1573,7 @@ ffi_closure_inner(ffi_cif *cif,
             }
             debug(2,"%s","\n");
         }else if(type->type == FFI_TYPE_COMPLEX){ /* {float/double/long double} complex */
+            FFI_ASSERT(n>0);
             /* VE passes complex as though they were two separate REGISTER scalars */
             UINT64 *pre, *pim;
             n >>= 1;    /* 1|2|4 becomes 0|1|2 */
@@ -1563,16 +1581,16 @@ ffi_closure_inner(ffi_cif *cif,
             int const gbump = (n<=1? 1: 2);
             int const abump = gbump*8;
             if( n==0 ){ /* 2 packed floats, passed as 2 separate REGISTER args */
-                if(gprcount < NGREGARG) { pre = &reg_args->gpr[gprcount]; gprcount+=gbump; }
+                if(gprcount < NGREGARG) { pre = &reg_args->gpr[gprcount]; gprcount+=gbump; argp+=abump;}
                 else                    { pre = (UINT64*)argp; argp+=abump; }
-                if(gprcount < NGREGARG) { pim = &reg_args->gpr[gprcount]; gprcount+=gbump; }
+                if(gprcount < NGREGARG) { pim = &reg_args->gpr[gprcount]; gprcount+=gbump; argp+=abump;}
                 else                    { pim = (UINT64*)argp; argp+=abump; }
                 *pre = (*pim & 0xffffFFFF00000000UL) | (*pre >> 32);
                 avalue[i] = (void*)pre;
             }else if( n==1 ){
-                if(gprcount < NGREGARG) { pre = &reg_args->gpr[gprcount]; gprcount+=1; }
+                if(gprcount < NGREGARG) { pre = &reg_args->gpr[gprcount]; gprcount+=1; argp+=8;}
                 else                    { pre = (UINT64*)argp; argp+=8; }
-                if(gprcount < NGREGARG) { pim = &reg_args->gpr[gprcount]; gprcount+=1; }
+                if(gprcount < NGREGARG) { pim = &reg_args->gpr[gprcount]; gprcount+=1; argp+=8;}
                 else                    { pim = (UINT64*)argp; argp+=8; }
                 // these must occupy consecutive memory locations
                 // (no problem if reg_args memory is directly before argp area)
@@ -1582,10 +1600,10 @@ ffi_closure_inner(ffi_cif *cif,
                 avalue[i] = (void*)pre;
             }else{
                 FFI_ASSERT( n==2 && type->size==32 );
-                gprcount += (gprcount & 1);
-                if(gprcount<NGREGARG){pre = &reg_args->gpr[gprcount]; gprcount+=2;}
+                if((gprcount & 1)){ ++gprcount; argp+=8; }
+                if(gprcount<NGREGARG){pre = &reg_args->gpr[gprcount]; gprcount+=2; argp+=16;}
                 else                 {pre = (UINT64*)argp; argp+=16;}
-                if(gprcount<NGREGARG){pim = &reg_args->gpr[gprcount]; gprcount+=2;}
+                if(gprcount<NGREGARG){pim = &reg_args->gpr[gprcount]; gprcount+=2; argp+=16;}
                 else                 {pim =(UINT64*) argp; argp+=16;}
                 // these must occupy consecutive memory locations
                 if(pim != pre + 1){
@@ -1594,6 +1612,7 @@ ffi_closure_inner(ffi_cif *cif,
                 avalue[i] = (void*)pre;
             }
         }else if (gprcount + n > NGREGARG){
+            FFI_ASSERT(n>0);
             // IF n==0 ALLOCA ???
             /* Stack args *always* at least 8 byte aligned. */
             if (align < 8){ align = 8; }
@@ -1607,8 +1626,7 @@ ffi_closure_inner(ffi_cif *cif,
             if( (argp-argp0) != argp_a ){
                 debug(2," a%dargp%ld->%ld",(long)argp_a,(long)(argp-argp0));
             }
-            if(n) debug(2," *argp%ld={int:%d,long:%ld}",(long)(argp-argp0),
-                    *(int*)argp, *(long*)argp);
+            debug(2," *argp@%p=%s",(void*)argp,ffi_avalue_str(type,argp));
 
             avalue[i] = argp;
             debug(2," a%lds%luA[%d]", (long)align, (long unsigned)z, (int)(argp-argp0));
@@ -1618,6 +1636,7 @@ ffi_closure_inner(ffi_cif *cif,
         }else if (n == 1) { /* The argument might use a single register. */
             /* we can use arg address directly. */
             // NO FFI_ASSERT( align >= 8 );
+            printf(" n==1 "); fflush(stdout);
             avalue[i] = &reg_args->gpr[gprcount];
             if(type->type == FFI_TYPE_FLOAT){
                 /* swap float from MSBs to LSBs */
@@ -1627,32 +1646,20 @@ ffi_closure_inner(ffi_cif *cif,
                 debug(2," flt%d'=%f",(int)gprcount,
                         *((float*)(&reg_args->gpr[gprcount])+1));
             }
-#if 0
-            if(type->type == FFI_TYPE_COMPLEX){ /* float complex */
-                /* sz8a4 memory from two registers */
-                float re = *((float*)(&reg_args->gpr[gprcount])+1);
-                float im = *((float*)(&reg_args->gpr[gprcount+1])+1); /* maybe */
-                debug(2," fq%d.real=%g",(int)gprcount, re );
-                debug(2," fq%d.imag=%g",(int)gprcount, im );
-                reg_args->gpr[gprcount] =
-                    (reg_args->gpr[gprcount+1] & 0xffffFFFF00000000UL)
-                    | (reg_args->gpr[gprcount] >> 32)
-                    ;
-                ++gprcount;             /* an extra bump */
-            }
-#endif
+            debug(2," *argp@%p=%s",(void*)argp,ffi_avalue_str(type,argp));
             debug(2," a%ds%d&R[%d]=0x%lx\n", align, (int)z, gprcount,
                     &reg_args->gpr[gprcount]);
             gprcount += n;
+            argp += n*8;
         }else{ /* o/w alloc space to make them consecutive. */
             /* n==2 or 4? we can use arg address directly. */
             FFI_ASSERT( align >= 8 );
             FFI_ASSERT( n==2 || n==4 );
-            // Some long scalars must begin on even-numbered reg
-            gprcount += (gprcount & 1);
+            // long scalars must begin on even-numbered reg/mem
+            if((gprcount & 1)){ ++gprcount; argp+=8; }
             debug(2,"%s","++g");
 #if 0
-            // On VE regargs can always be alloa'ed? Why this?
+           C// On VE regargs can always be alloa'ed? Why this?
             char *a = alloca (n*8);
             FFI_ASSERT(((uintptr_t)a & 0x0F) == 0U); //align 16
             unsigned int j;
@@ -1663,6 +1670,7 @@ ffi_closure_inner(ffi_cif *cif,
             }
 #else
             avalue[i] = &reg_args->gpr[gprcount];
+            debug(2," *argp@%p=%s",(void*)argp,ffi_avalue_str(type,argp));
             if(type->type == FFI_TYPE_LONGDOUBLE){
                 UINT64 const tmp = reg_args->gpr[gprcount];
                 reg_args->gpr[gprcount] = reg_args->gpr[gprcount+1];
@@ -1670,7 +1678,7 @@ ffi_closure_inner(ffi_cif *cif,
             }
             debug(2," a%ds%d&R[%d..%d]\n", align, z, gprcount,
                     gprcount+n-1);
-            gprcount += n;
+            gprcount += n; argp += n*8;
 #endif
         }
     }

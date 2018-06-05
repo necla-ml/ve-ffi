@@ -65,6 +65,8 @@ static ffi_type ffi_type_char;
 
 #define FFI_PREP_CIF(cif,argtypes,rettype) \
   if (ffi_prep_cif(&(cif),FFI_DEFAULT_ABI,sizeof(argtypes)/sizeof(argtypes[0]),&rettype,argtypes) != FFI_OK) abort()
+#define FFI_PREP_CIF_VAR(cif,nfixedargs,argtypes,rettype) \
+  if (ffi_prep_cif_var(&(cif),FFI_DEFAULT_ABI,nfixedargs,sizeof(argtypes)/sizeof(argtypes[0]),&rettype,argtypes) != FFI_OK) abort()
 #define FFI_PREP_CIF_NOARGS(cif,rettype) \
   if (ffi_prep_cif(&(cif),FFI_DEFAULT_ABI,0,&rettype,NULL) != FFI_OK) abort()
 
@@ -1452,6 +1454,19 @@ void ul_cp3_simulator (ffi_cif* cif, void* retp, /*const*/ void* /*const*/ *args
   goto ok;
 oops: ret=13UL;
 ok: *(ulong*)retp = ret;
+}}
+void d_divar_simulator(ffi_cif* cif, void* retp, /*const*/ void* /*const*/ *args, void* data){
+  if (data != (void*)&d_divar) { fprintf(out,"wrong data for d_divar\n"); exit(1); }
+ {double d1 = *(double*)(*args++);
+  unsigned cnt = *(unsigned*)(*args++);
+  fprintf(out,"double d_divar(double,unsigned,...):(%g,%u",d1,cnt); fflush(out);
+  for(unsigned i=2U; i<cif->nargs; ++i){
+    double d = *(double*)(*args++);
+    fprintf(out,",%g",d); fflush(out);
+    d1 += d;
+  }
+  fprintf(out,")"); fflush(out);
+  *(double*)retp = d1;
 }}
 
 
@@ -3253,7 +3268,7 @@ int main (void)
 #endif
 
 #if (!defined(DGTEST)) || DGTEST == 75    
-    dr = d_l2d(l1,l2,ll1,l9);
+    dr = d_l2d(l1,l2,d2,l9);
     FPRINTF(out,"->%g\n",dr);
     fflush(out);
     dr = 0.0; clear_traces();
@@ -3263,7 +3278,7 @@ int main (void)
       ffi_cif cif;
       FFI_PREP_CIF(cif,argtypes,ffi_type_double);
       PREP_CALLBACK(cif,d_l2d_simulator,(void*)d_l2d);
-      dr = ((double (*) (long,long,double,long)) callback_code) (l1,l2,ll1,l9);
+      dr = ((double (*) (long,long,double,long)) callback_code) (l1,l2,d2,l9);
     }
     FREE_CALLBACK();
     FPRINTF(out,"->%g\n",dr);
@@ -3271,7 +3286,7 @@ int main (void)
 #endif
 
 #if (!defined(DGTEST)) || DGTEST == 76    
-    dr = d_l3d(l1,l2,l3,ll1,l9);
+    dr = d_l3d(l1,l2,l3,d2,l9);
     FPRINTF(out,"->%g\n",dr);
     fflush(out);
     dr = 0.0; clear_traces();
@@ -3281,7 +3296,7 @@ int main (void)
       ffi_cif cif;
       FFI_PREP_CIF(cif,argtypes,ffi_type_double);
       PREP_CALLBACK(cif,d_l3d_simulator,(void*)d_l3d);
-      dr = ((double (*) (long,long,long,double,long)) callback_code) (l1,l2,l3,ll1,l9);
+      dr = ((double (*) (long,long,long,double,long)) callback_code) (l1,l2,l3,d2,l9);
     }
     FREE_CALLBACK();
     FPRINTF(out,"->%g\n",dr);
@@ -3289,7 +3304,7 @@ int main (void)
 #endif
 
 #if (!defined(DGTEST)) || DGTEST == 77    
-    dr = d_l4d(l1,l2,l3,l4,ll1,l9);
+    dr = d_l4d(l1,l2,l3,l4,d2,l9);
     FPRINTF(out,"->%g\n",dr);
     fflush(out);
     dr = 0.0; clear_traces();
@@ -3299,7 +3314,7 @@ int main (void)
       ffi_cif cif;
       FFI_PREP_CIF(cif,argtypes,ffi_type_double);
       PREP_CALLBACK(cif,d_l4d_simulator,(void*)d_l4d);
-      dr = ((double (*) (long,long,long,long,double,long)) callback_code) (l1,l2,l3,l4,ll1,l9);
+      dr = ((double (*) (long,long,long,long,double,long)) callback_code) (l1,l2,l3,l4,d2,l9);
     }
     FREE_CALLBACK();
     FPRINTF(out,"->%g\n",dr);
@@ -3307,7 +3322,7 @@ int main (void)
 #endif
 
 #if (!defined(DGTEST)) || DGTEST == 78
-    dr = d_l5d(l1,l2,l3,l4,l5,ll1,l9);
+    dr = d_l5d(l1,l2,l3,l4,l5,d2,l9);
     FPRINTF(out,"->%g\n",dr);
     fflush(out);
     dr = 0.0; clear_traces();
@@ -3317,7 +3332,7 @@ int main (void)
       ffi_cif cif;
       FFI_PREP_CIF(cif,argtypes,ffi_type_double);
       PREP_CALLBACK(cif,d_l5d_simulator,(void*)d_l5d);
-      dr = ((double (*) (long,long,long,long,long,double,long)) callback_code) (l1,l2,l3,l4,l5,ll1,l9);
+      dr = ((double (*) (long,long,long,long,long,double,long)) callback_code) (l1,l2,l3,l4,l5,d2,l9);
     }
     FREE_CALLBACK();
     FPRINTF(out,"->%g\n",dr);
@@ -3325,7 +3340,7 @@ int main (void)
 #endif
 
 #if (!defined(DGTEST)) || DGTEST == 79
-    dr = d_l6d(l1,l2,l3,l4,l5,l6,ll1,l9);
+    dr = d_l6d(l1,l2,l3,l4,l5,l6,d2,l9);
     FPRINTF(out,"->%g\n",dr);
     fflush(out);
     dr = 0.0; clear_traces();
@@ -3335,7 +3350,7 @@ int main (void)
       ffi_cif cif;
       FFI_PREP_CIF(cif,argtypes,ffi_type_double);
       PREP_CALLBACK(cif,d_l6d_simulator,(void*)d_l6d);
-      dr = ((double (*) (long,long,long,long,long,long,double,long)) callback_code) (l1,l2,l3,l4,l5,l6,ll1,l9);
+      dr = ((double (*) (long,long,long,long,long,long,double,long)) callback_code) (l1,l2,l3,l4,l5,l6,d2,l9);
     }
     FREE_CALLBACK();
     FPRINTF(out,"->%g\n",dr);
@@ -3343,7 +3358,7 @@ int main (void)
 #endif
 
 #if (!defined(DGTEST)) || DGTEST == 80
-    dr = d_l7d(l1,l2,l3,l4,l5,l6,l7,ll1,l9);
+    dr = d_l7d(l1,l2,l3,l4,l5,l6,l7,d2,l9);
     FPRINTF(out,"->%g\n",dr);
     fflush(out);
     dr = 0.0; clear_traces();
@@ -3353,7 +3368,7 @@ int main (void)
       ffi_cif cif;
       FFI_PREP_CIF(cif,argtypes,ffi_type_double);
       PREP_CALLBACK(cif,d_l7d_simulator,(void*)d_l7d);
-      dr = ((double (*) (long,long,long,long,long,long,long,double,long)) callback_code) (l1,l2,l3,l4,l5,l6,l7,ll1,l9);
+      dr = ((double (*) (long,long,long,long,long,long,long,double,long)) callback_code) (l1,l2,l3,l4,l5,l6,l7,d2,l9);
     }
     FREE_CALLBACK();
     FPRINTF(out,"->%g\n",dr);
@@ -3402,6 +3417,96 @@ int main (void)
 #endif
   }
 
+  /* variadic tests */
+  {
+    double dr;
+    //void *null=NULL;
+    //int ir;
+    //char *fmt="%s AND %s AND %s";
+    //char buf[120];
+#if (!defined(DGTEST)) || DGTEST == 82
+    dr = d_divar(d1,3, d2,d3,d4);
+    FPRINTF(out,"->%g\n",dr); fflush(out);
+    dr = 0; clear_traces();
+    ALLOC_CALLBACK();
+    {
+      ffi_type* argtypes[] = { &ffi_type_double, &ffi_type_uint, &ffi_type_double, &ffi_type_double, &ffi_type_double };
+      ffi_cif cif;
+      FFI_PREP_CIF_VAR(cif,2,argtypes,ffi_type_double); /* 2 fixed args */
+      PREP_CALLBACK(cif,d_divar_simulator,(void*)d_divar);
+      dr = ((double (*) (double,unsigned,...))callback_code) (d1,3U,d2,d3,d4);
+    }
+    FPRINTF(out,"->%g\n",dr); fflush(out);
+#if 0
+  /* */
+  dr = d_pdvar(&d1,&d2,&d3,&d4,null);
+  FPRINTF(out,"->%g\n",dr); fflush(out);
+  dr = 0; clear_traces();
+  {
+    ffi_type* argtypes[] = { &ffi_type_pointer, &ffi_type_pointer, &ffi_type_pointer, &ffi_type_pointer, &ffi_type_pointer };
+    ffi_cif cif;
+    FFI_PREP_CIF_VAR(cif,2,argtypes,ffi_type_double); /* 2 fixed args */
+    {
+      double *pd1=&d1;
+      double *pd2=&d2;
+      double *pd3=&d3;
+      double *pd4=&d4;
+      void *pnull=&null;
+      /*const*/ void* args[] = { &pd1, &pd2, &pd3, &pd4, pnull };
+      FFI_CALL(cif, d_pdvar, args, &dr);
+    }
+  }
+  FPRINTF(out,"->%g\n",dr); fflush(out);
+  /* */
+ {char *fmt="%s AND %s AND %s";
+  char buf[120];
+  int ir = i_cpivar(buf,fmt,str1,str2,str3);
+  FPRINTF(out,"->%d\n",ir); fflush(out);
+  ir = 0; clear_traces();
+  {
+    ffi_type* argtypes[] = { &ffi_type_pointer, &ffi_type_pointer, &ffi_type_pointer, &ffi_type_pointer, &ffi_type_pointer };
+    ffi_cif cif;
+    FFI_PREP_CIF_VAR(cif,2,argtypes,ffi_type_double); /* 2 fixed args */
+    {
+      char* pbuf=&buf[0];
+      char* pfmt = fmt;
+      void* pstr1 = str1;
+      void* pstr2 = str2;
+      void* pstr3 = str3;
+      /*const*/ void* args[] = { &pbuf, &pfmt, &pstr1, &pstr2, &pstr3 };
+      FFI_CALL(cif, i_cpivar, args, &ir);
+    }
+  }
+  FPRINTF(out,"->%d\n",ir); fflush(out);
+  }
+      ffi_type* argtypes[] = { &ffi_type_pointer, &ffi_type_pointer };
+      ffi_cif cif;
+      FFI_PREP_CIF(cif,argtypes,ffi_type_sint);
+      PREP_CALLBACK(cif,i_cpcp_simulator,(void*)i_cpcp);
+      ir = ((int (*) (char*,char*)) callback_code) (str1,str2);
+    }
+    FREE_CALLBACK();
+    FPRINTF(out,"->%d\n",ir);
+    fflush(out);
+    /* */
+    ulr = ul_cp3(str1,str2,str3);
+    FPRINTF(out,"->%lu\n",ulr);
+    fflush(out);
+    ulr = 0UL; clear_traces();
+    ALLOC_CALLBACK();
+    {
+      ffi_type* argtypes[] = { &ffi_type_pointer, &ffi_type_pointer, &ffi_type_pointer };
+      ffi_cif cif;
+      FFI_PREP_CIF(cif,argtypes,ffi_type_pointer);
+      PREP_CALLBACK(cif,ul_cp3_simulator,(void*)ul_cp3);
+      ulr = ((ulong (*) (char*,char*,char*)) callback_code) (str1,str2,str3);
+    }
+    FREE_CALLBACK();
+    FPRINTF(out,"->%lu\n",ulr);
+    fflush(out);
+#endif
+#endif
+  }
   printf("test-callback: normal exit\n");
   printf("test-callback: normal exit\n"); /* twice so not flagged as failure */
   fflush(stdout);  
