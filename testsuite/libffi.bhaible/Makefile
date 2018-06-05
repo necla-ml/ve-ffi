@@ -1,5 +1,7 @@
-CLOSURE_SUPPORT?=1
+HAVE_LONG_DOUBLE?=1
 COMPLEX_SUPPORT?=1
+CLOSURE_SUPPORT?=1
+VARIADIC_SUPPORT?=1
 # for VE, check-callback can't work (needs closure API)
 
 prefix ?= ../../install
@@ -25,8 +27,7 @@ LDFLAGS = -L$(libdir) -Wl,-rpath,$(libdir)
 
 # or, for standalone, could grab HAVE_foo things from environment during compile:
 #CPPFLAGS += -I../../@target_triplet@ # for fficonfig, for optional types
-HAVE_LONG_DOUBLE?=1
-CPPFLAGS+=-DHAVE_LONG_DOUBLE=$(HAVE_LONG_DOUBLE) -DHAVE_COMPLEX=$(COMPLEX_SUPPORT)
+CPPFLAGS+=-DHAVE_LONG_DOUBLE=$(HAVE_LONG_DOUBLE) -DHAVE_COMPLEX=$(COMPLEX_SUPPORT) -DVARIADIC_SUPPORT=$(VARIADIC_SUPPORT)
 VERBOSE_FLAGS:=-DVE_DEBUG_LEVEL=5 -DVE_SYSV_DEBUG=1
 
 # -g triggers a compiler assertion in ncc-1.1.2

@@ -1133,4 +1133,54 @@ double d_l7d (long a1, long a2, long a3, long a4, long a5, long a6, long a7, dou
   fflush(out);
   return r;
 }
+double d_divar(double d1, unsigned cnt, ...){
+  double r = d1;
+  fprintf(out,"double d_divar(double,unsigned,...):(%g,%u",d1,cnt); fflush(out);
+  va_list args;
+  va_start(args, cnt);
+  for(unsigned i=0U; i<cnt; ++i){
+    double d = va_arg(args,double);
+    fprintf(out,",%g",d); fflush(out);
+    r += d;
+  }
+  va_end(args);
+  fprintf(out,")"); fflush(out);
+  return r;
+}
+/* illegal C : double d_pdvar(...) */
+double d_pdvar(double* pd,...){
+  double r=0.0;
+  fprintf(out,"double d_pdvar(double*,...):("); fflush(out);
+  if(pd==NULL){
+    fprintf(out,"NULL"); fflush(out);
+  }else{
+    r = *pd;
+    fprintf(out,"%g",*pd); fflush(out);
+    va_list args;
+    va_start(args, pd);
+    for(unsigned i=1U; i<999U; ++i){
+      double* d = va_arg(args,double*);
+      if((void*)d == NULL){
+        fprintf(out,",NULL"); fflush(out);
+        break;
+      }
+      fprintf(out,",%g",*d); fflush(out);
+      r += *d;
+    }
+    va_end(args);
+  }
+  fprintf(out,")"); fflush(out);
+  return r;
+}
+int i_cpivar(char *buf, char *fmt, ...){
+  int r;
+  va_list args;
+  fprintf(out,"double i_cpivar(char*,char*,...):(%p,\"%s\",...)",(void*)buf,fmt); fflush(out);
+  va_start(args,fmt);
+  r = vsprintf(buf,fmt,args);
+  fprintf(out,":%s",buf);
+  va_end(args);
+  return r;
+}
+
 /* vim: set sw=2 ts=2 et: */

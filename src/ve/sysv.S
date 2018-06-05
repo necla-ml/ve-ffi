@@ -794,16 +794,9 @@ ffi_closure_ve:
 
 
 .L_closure_rvalue:
-#if 0 // old. (debug not needed since ffi_call shows "how")
-	lea	%s1, ffi_closure_OFS_PARMS(,%sp)	# tmp area (reuse)
-	st	%s0, 0(,%s1)				# stow rtype flags
-	PRINT_MSG_U64(cl_rflags, or %s1,0,%s0)
-	lea	%s1, ffi_closure_OFS_PARMS(,%sp)	# tmp area (reuse)
-	ld	%s6, 0(,%s1)				# load rtype flags
-#else // just use scratch registers... no calls allowed
+	// just use scratch registers... no calls allowed
 	and	%s6, %s0,(58)0		# rtype->type from LSB (FFI_TYPE_FOO)
 	srl	%s7, %s0,8		# rtype->size in next byte
-#endif
 
 	lea	%s1, ffi_closure_OFS_PARMS(,%sp)
 	lea	%s4, ffi_closure_OFS_RVALUE(,%sp)	# pre-tramp ret addr

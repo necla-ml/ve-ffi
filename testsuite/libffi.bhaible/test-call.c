@@ -23,6 +23,9 @@
 #include <string.h>
 #include <ffi.h>
 #include "alignof.h"
+#ifdef VARIADIC_SUPPORT
+#include "stdarg.h"
+#endif
 
 #include "testcases.c"
 
@@ -65,6 +68,8 @@ static ffi_type ffi_type_char;
 
 #define FFI_PREP_CIF(cif,argtypes,rettype) \
   if (ffi_prep_cif(&(cif),FFI_DEFAULT_ABI,sizeof(argtypes)/sizeof(argtypes[0]),&rettype,argtypes) != FFI_OK) abort()
+#define FFI_PREP_CIF_VAR(cif,nfixedargs,argtypes,rettype) \
+  if (ffi_prep_cif_var(&(cif),FFI_DEFAULT_ABI,nfixedargs,sizeof(argtypes)/sizeof(argtypes[0]),&rettype,argtypes) != FFI_OK) abort()
 #define FFI_PREP_CIF_NOARGS(cif,rettype) \
   if (ffi_prep_cif(&(cif),FFI_DEFAULT_ABI,0,&rettype,NULL) != FFI_OK) abort()
 #define FFI_CALL(cif,fn,args,retaddr) \
@@ -2321,6 +2326,73 @@ void
   return;
 }
 
+#ifdef VARIADIC_SUPPORT
+void
+  variadic_tests (void)
+{
+#if (!defined(DGTEST)) || DGTEST == 83
+  double dr;
+  void *null=NULL;
+  dr = d_divar(d1,3, d2,d3,d4);
+  FPRINTF(out,"->%g\n",dr); fflush(out);
+  dr = 0; clear_traces();
+  {
+    ffi_type* argtypes[] = { &ffi_type_double, &ffi_type_uint, &ffi_type_double, &ffi_type_double, &ffi_type_double };
+    ffi_cif cif;
+    FFI_PREP_CIF_VAR(cif,2,argtypes,ffi_type_double); /* 2 fixed args */
+    {
+      unsigned varcount = 3U;
+      /*const*/ void* args[] = { &d1, &varcount, &d2, &d3, &d4 };
+      FFI_CALL(cif, d_divar, args, &dr);
+    }
+  }
+  FPRINTF(out,"->%g\n",dr); fflush(out);
+  /* */
+  dr = d_pdvar(&d1,&d2,&d3,&d4,null);
+  FPRINTF(out,"->%g\n",dr); fflush(out);
+  dr = 0; clear_traces();
+  {
+    ffi_type* argtypes[] = { &ffi_type_pointer, &ffi_type_pointer, &ffi_type_pointer, &ffi_type_pointer, &ffi_type_pointer };
+    ffi_cif cif;
+    FFI_PREP_CIF_VAR(cif,2,argtypes,ffi_type_double); /* 2 fixed args */
+    {
+      double *pd1=&d1;
+      double *pd2=&d2;
+      double *pd3=&d3;
+      double *pd4=&d4;
+      void *pnull=&null;
+      /*const*/ void* args[] = { &pd1, &pd2, &pd3, &pd4, pnull };
+      FFI_CALL(cif, d_pdvar, args, &dr);
+    }
+  }
+  FPRINTF(out,"->%g\n",dr); fflush(out);
+  /* */
+ {char *fmt="%s AND %s AND %s";
+  char buf[120];
+  int ir = i_cpivar(buf,fmt,str1,str2,str3);
+  FPRINTF(out,"->%d\n",ir); fflush(out);
+  ir = 0; clear_traces();
+  {
+    ffi_type* argtypes[] = { &ffi_type_pointer, &ffi_type_pointer, &ffi_type_pointer, &ffi_type_pointer, &ffi_type_pointer };
+    ffi_cif cif;
+    FFI_PREP_CIF_VAR(cif,2,argtypes,ffi_type_double); /* 2 fixed args */
+    {
+      char* pbuf=&buf[0];
+      char* pfmt = fmt;
+      void* pstr1 = str1;
+      void* pstr2 = str2;
+      void* pstr3 = str3;
+      /*const*/ void* args[] = { &pbuf, &pfmt, &pstr1, &pstr2, &pstr3 };
+      FFI_CALL(cif, i_cpivar, args, &ir);
+    }
+  }
+  FPRINTF(out,"->%d\n",ir); fflush(out);
+  }
+#endif
+  return;
+}
+#endif //VARIADIC_SUPPORT
+
 int
   main (void)
 {
@@ -2345,6 +2417,7 @@ int
   structure_tests();
   gpargs_boundary_tests();
   string_tests();
+  variadic_tests();
 
   printf("test-call: normal exit\n");
   printf("test-call: normal exit\n"); /* print it twice, so uniq doesn't think FAIL */

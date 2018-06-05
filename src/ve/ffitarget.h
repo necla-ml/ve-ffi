@@ -46,10 +46,12 @@ typedef enum ffi_abi {
   FFI_DEFAULT_ABI = FFI_SYSV
 } ffi_abi;
 
-#define FFI_EXTRA_CIF_FIELDS long unsigned flags2
-
-// TODO
-//#define FFI_TARGET_SPECIFIC_VARIADIC 32
+// VE internal:
+//   Customize the libffi generic code (comment or uncomment)
+//#define FFI_TARGET_SPECIFIC_STACK_SPACE_ALLOCATION
+// FFI_TARGET_SPECIFIC_VARIADIC is some power of two > FFI_TYPE_LAST
+#define FFI_TARGET_SPECIFIC_VARIADIC 32
+#define FFI_EXTRA_CIF_FIELDS long unsigned flags2; unsigned nfixedargs
 #endif
 
 /* ---- Definitions for closures ----------------------------------------- */
