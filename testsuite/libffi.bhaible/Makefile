@@ -58,6 +58,9 @@ test-call test-call-v test-call-pic test-call-pic-v: test-call.c testcases.c
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $(PIC_FLAGS) $(VERBOSE_FLAGS) -o test-call-pic-v test-call.c -lffi
 	-nreadelf -d test-call-pic | grep '\(NEEDED\)\|\(RPATH\)'
 	-nreadelf -d test-call | grep '\(NEEDED\)\|\(RPATH\)'
+test-call83: test-call.c testcases.c
+	$(CC) $(CPPFLAGS) $(CFLAGS) -DDGTEST=83 -Wl,-Bstatic -o $@.i -E test-call.c
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -DDGTEST=83 -Wl,-Bstatic -o $@ test-call.c -lffi
 
 test-callback test-callback-v: test-callback.c testcases.c
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -o test-callback test-callback.c -lffi
@@ -83,6 +86,7 @@ check-callback: test-callback
 
 clean:
 	rm -f test-call test-call-pic test-call-v test-call-pic-v \
+		test-call83 \
 		test-callback test-callback-v \
 		test-call.out test-call.out1 \
 		test-callback.out test-callback.out1 \

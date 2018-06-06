@@ -1468,6 +1468,53 @@ void d_divar_simulator(ffi_cif* cif, void* retp, /*const*/ void* /*const*/ *args
   fprintf(out,")"); fflush(out);
   *(double*)retp = d1;
 }}
+void i_cpivar_simulator(ffi_cif* cif, void* retp, /*const*/ void* /*const*/ *args, void* data){
+  if (data != (void*)&i_cpivar) { fprintf(out,"wrong data for i_cpivar\n"); exit(1); }
+ {char *buf = *(char**)(*args++);
+  char *fmt = *(char**)(*args++);
+  fprintf(out,"int i_cpivar(char*,char*,...):(%p,\"%s\",...)",(void*)buf,fmt); fflush(out);
+  int r=0;
+  /* Want a way to for libffi to "construct" a va_list (memory blob)
+   * and pass it around.   RFE milestone for libffi 4.0 (TBD).
+   * For now ASSUME that all varargs here are actually char* (### UGLY ###) */
+  switch(cif->nargs){
+    case(2): r=sprintf(buf,fmt); break;
+    case(3): r=sprintf(buf,fmt,*(char**)args[0]); break;
+    case(4): r=sprintf(buf,fmt,*(char**)args[0],*(char**)args[1]); break;
+    case(5): r=sprintf(buf,fmt,*(char**)args[0],*(char**)args[1],*(char**)args[2]); break;
+    case(6): r=sprintf(buf,fmt,*(char**)args[0],*(char**)args[1],*(char**)args[2],*(char**)args[3]); break;
+    default: fprintf(out,"variadic closures TBD for libffi 4.0\n"); exit(1);
+  }
+  fprintf(out,":%s",buf);
+  /* Could also think of using the normal FFI_CALL mechanism, but this has same issues */
+  *(int*)retp = r;
+}}
+//double d_pdvar(double* pd,...)
+void d_pdvar_simulator(ffi_cif* cif, void* retp, /*const*/ void* /*const*/ *args, void* data){
+  if (data != (void*)&d_pdvar) { fprintf(out,"wrong data for d_pdvar\n"); exit(1); }
+ {double r=0.0;
+  double *pd = *(double**)(*args++);
+  fprintf(out,"double d_pdvar(double*,...):("); fflush(out);
+  if(pd==NULL){
+    fprintf(out,"NULL"); fflush(out);
+  }else{
+    r = *pd;
+    fprintf(out,"%g",*pd); fflush(out);
+#pragma _NEC novector
+    for(unsigned i=1U; i<999U; ++i){
+      double* d = *(double**)(*args++); /*va_arg(args,double*);*/
+      /*fprintf(out,",d@%p",(void*)d);*/
+      if((void*)d == NULL){
+        fprintf(out,",NULL"); fflush(out);
+        break;
+      }
+      fprintf(out,",%g",*d); fflush(out);
+      r += *d;
+    }
+  }
+  fprintf(out,")"); fflush(out);
+  *(double*)retp = r;
+}}
 
 
 /*
@@ -1497,6 +1544,66 @@ void clear_traces (void)
   clear_traces_J();
 }
 
+static void* callback_code;
+static void* callback_writable;
+
+#define ALLOC_CALLBACK() \
+  callback_writable = ffi_closure_alloc(sizeof(ffi_closure),&callback_code); \
+if (!callback_writable) abort()
+#define PREP_CALLBACK(cif,simulator,data) \
+  if (ffi_prep_closure_loc(callback_writable,&(cif),simulator,data,callback_code) != FFI_OK) abort()
+#define FREE_CALLBACK() \
+  ffi_closure_free(callback_writable)
+
+void variadic_tests(FILE* out){
+  /* variadic tests */
+  double dr;
+#if (!defined(DGTEST)) || DGTEST == 82
+  dr = d_divar(d1,3, d2,d3,d4);
+  FPRINTF(out,"->%g\n",dr); fflush(out);
+  dr = 0; clear_traces(); ALLOC_CALLBACK();
+  {
+    ffi_type* argtypes[] = { &ffi_type_double, &ffi_type_uint, &ffi_type_double, &ffi_type_double, &ffi_type_double };
+    ffi_cif cif;
+    FFI_PREP_CIF_VAR(cif,2,argtypes,ffi_type_double); /* 2 fixed args */
+    PREP_CALLBACK(cif,d_divar_simulator,(void*)d_divar);
+    dr = ((double (*) (double,unsigned,...))callback_code) (d1,3U,d2,d3,d4);
+  }
+  FPRINTF(out,"->%g\n",dr); fflush(out);
+  /* */
+  {
+    void *null=NULL;
+    dr = d_pdvar(&d1,&d2,&d3,&d4,null);
+    FPRINTF(out,"->%g\n",dr); fflush(out);
+    dr = 0; clear_traces(); ALLOC_CALLBACK();
+    {
+      /* libffi does not provide a way to "construct" a va_list (milestone for libffi 4.0) */
+      ffi_type* argtypes[] = { &ffi_type_pointer, &ffi_type_pointer, &ffi_type_pointer, &ffi_type_pointer, &ffi_type_pointer };
+      ffi_cif cif;
+      FFI_PREP_CIF_VAR(cif,1,argtypes,ffi_type_double); /* 1 fixed arg */
+      PREP_CALLBACK(cif,d_pdvar_simulator,(void*)d_pdvar);
+      dr = ((double (*)(double* pd,...))callback_code) (&d1,&d2,&d3,&d4,null);
+    }
+    FPRINTF(out,"->%g\n",dr); fflush(out);
+  }
+  /* */
+  {
+    char *fmt="%s AND %s AND %s";
+    char buf[120];
+    int ir = i_cpivar(buf,fmt,str1,str2,str3);
+    FPRINTF(out,"->%d\n",ir); fflush(out);
+    ir = 0; clear_traces(); ALLOC_CALLBACK();
+    {
+      ffi_type* argtypes[] = { &ffi_type_pointer, &ffi_type_pointer, &ffi_type_pointer, &ffi_type_pointer, &ffi_type_pointer };
+      ffi_cif cif;
+      FFI_PREP_CIF_VAR(cif,2,argtypes,ffi_type_double); /* 2 fixed args */
+      PREP_CALLBACK(cif,i_cpivar_simulator,(void*)i_cpivar);
+      ir = ((int (*)(char *,char *,...))callback_code) (&buf[0],fmt,str1,str2,str3);
+    }
+    FPRINTF(out,"->%d\n",ir); fflush(out);
+  }
+#endif
+}
 int main (void)
 {
   void* callback_code;
@@ -3417,96 +3524,8 @@ int main (void)
 #endif
   }
 
-  /* variadic tests */
-  {
-    double dr;
-    //void *null=NULL;
-    //int ir;
-    //char *fmt="%s AND %s AND %s";
-    //char buf[120];
-#if (!defined(DGTEST)) || DGTEST == 82
-    dr = d_divar(d1,3, d2,d3,d4);
-    FPRINTF(out,"->%g\n",dr); fflush(out);
-    dr = 0; clear_traces();
-    ALLOC_CALLBACK();
-    {
-      ffi_type* argtypes[] = { &ffi_type_double, &ffi_type_uint, &ffi_type_double, &ffi_type_double, &ffi_type_double };
-      ffi_cif cif;
-      FFI_PREP_CIF_VAR(cif,2,argtypes,ffi_type_double); /* 2 fixed args */
-      PREP_CALLBACK(cif,d_divar_simulator,(void*)d_divar);
-      dr = ((double (*) (double,unsigned,...))callback_code) (d1,3U,d2,d3,d4);
-    }
-    FPRINTF(out,"->%g\n",dr); fflush(out);
-#if 0
-  /* */
-  dr = d_pdvar(&d1,&d2,&d3,&d4,null);
-  FPRINTF(out,"->%g\n",dr); fflush(out);
-  dr = 0; clear_traces();
-  {
-    ffi_type* argtypes[] = { &ffi_type_pointer, &ffi_type_pointer, &ffi_type_pointer, &ffi_type_pointer, &ffi_type_pointer };
-    ffi_cif cif;
-    FFI_PREP_CIF_VAR(cif,2,argtypes,ffi_type_double); /* 2 fixed args */
-    {
-      double *pd1=&d1;
-      double *pd2=&d2;
-      double *pd3=&d3;
-      double *pd4=&d4;
-      void *pnull=&null;
-      /*const*/ void* args[] = { &pd1, &pd2, &pd3, &pd4, pnull };
-      FFI_CALL(cif, d_pdvar, args, &dr);
-    }
-  }
-  FPRINTF(out,"->%g\n",dr); fflush(out);
-  /* */
- {char *fmt="%s AND %s AND %s";
-  char buf[120];
-  int ir = i_cpivar(buf,fmt,str1,str2,str3);
-  FPRINTF(out,"->%d\n",ir); fflush(out);
-  ir = 0; clear_traces();
-  {
-    ffi_type* argtypes[] = { &ffi_type_pointer, &ffi_type_pointer, &ffi_type_pointer, &ffi_type_pointer, &ffi_type_pointer };
-    ffi_cif cif;
-    FFI_PREP_CIF_VAR(cif,2,argtypes,ffi_type_double); /* 2 fixed args */
-    {
-      char* pbuf=&buf[0];
-      char* pfmt = fmt;
-      void* pstr1 = str1;
-      void* pstr2 = str2;
-      void* pstr3 = str3;
-      /*const*/ void* args[] = { &pbuf, &pfmt, &pstr1, &pstr2, &pstr3 };
-      FFI_CALL(cif, i_cpivar, args, &ir);
-    }
-  }
-  FPRINTF(out,"->%d\n",ir); fflush(out);
-  }
-      ffi_type* argtypes[] = { &ffi_type_pointer, &ffi_type_pointer };
-      ffi_cif cif;
-      FFI_PREP_CIF(cif,argtypes,ffi_type_sint);
-      PREP_CALLBACK(cif,i_cpcp_simulator,(void*)i_cpcp);
-      ir = ((int (*) (char*,char*)) callback_code) (str1,str2);
-    }
-    FREE_CALLBACK();
-    FPRINTF(out,"->%d\n",ir);
-    fflush(out);
-    /* */
-    ulr = ul_cp3(str1,str2,str3);
-    FPRINTF(out,"->%lu\n",ulr);
-    fflush(out);
-    ulr = 0UL; clear_traces();
-    ALLOC_CALLBACK();
-    {
-      ffi_type* argtypes[] = { &ffi_type_pointer, &ffi_type_pointer, &ffi_type_pointer };
-      ffi_cif cif;
-      FFI_PREP_CIF(cif,argtypes,ffi_type_pointer);
-      PREP_CALLBACK(cif,ul_cp3_simulator,(void*)ul_cp3);
-      ulr = ((ulong (*) (char*,char*,char*)) callback_code) (str1,str2,str3);
-    }
-    FREE_CALLBACK();
-    FPRINTF(out,"->%lu\n",ulr);
-    fflush(out);
-#endif
-#endif
-  }
+  variadic_tests(out);
+
   printf("test-callback: normal exit\n");
   printf("test-callback: normal exit\n"); /* twice so not flagged as failure */
   fflush(stdout);  

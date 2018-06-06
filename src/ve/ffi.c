@@ -1302,7 +1302,7 @@ void ffi_call(/*@dependent@*/ ffi_cif *cif,
             && return_type (cif->rtype) != FFI_TYPE_STRUCT)
         memcpy (rvalue, &trvalue, cif->rtype->size);
 #endif
-    debug(2,"ve: %s ffi_call(ffi_cif*, void(*fn)(), void*rvalue, void**avalue)) %s\n      cif = %s\n      fn = %p, rvalue = %p, avalue=%p\n      %s\n\n",
+    debug(3,"ve: %s ffi_call(ffi_cif*, void(*fn)(), void*rvalue, void**avalue)) %s\n      cif = %s\n      fn = %p, rvalue = %p, avalue=%p\n      %s\n\n",
             "ENDS",(FFI_USE_ASSEMBLER? "(sysv.S)":"(ffi_call_SYSV_example)"),
             ffi_cif_str(cif), fn, rvalue, avalue, ffi_avalues_str(cif,avalue));
 }
@@ -1542,7 +1542,7 @@ ffi_closure_inner(ffi_cif *cif,
         fflush(stdout);
         foo(); /* breakpoint */
         if (n == 0 ){ // ve struct passed as ptr, which can be in reg
-            printf(" n==0 "); fflush(stdout);
+            debug(3," n==0 "); fflush(stdout);
             FFI_ASSERT( argclass(type) == VE_REFERENCE );
             //if (align < 8){ align = 8; }
             //argp = (void *) FFI_ALIGN (argp, align);
@@ -1636,7 +1636,7 @@ ffi_closure_inner(ffi_cif *cif,
         }else if (n == 1) { /* The argument might use a single register. */
             /* we can use arg address directly. */
             // NO FFI_ASSERT( align >= 8 );
-            printf(" n==1 "); fflush(stdout);
+            debug(3," n==1 "); fflush(stdout);
             avalue[i] = &reg_args->gpr[gprcount];
             if(type->type == FFI_TYPE_FLOAT){
                 /* swap float from MSBs to LSBs */

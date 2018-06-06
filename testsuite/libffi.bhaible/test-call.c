@@ -2331,62 +2331,92 @@ void
   variadic_tests (void)
 {
 #if (!defined(DGTEST)) || DGTEST == 83
-  double dr;
-  void *null=NULL;
-  dr = d_divar(d1,3, d2,d3,d4);
-  FPRINTF(out,"->%g\n",dr); fflush(out);
-  dr = 0; clear_traces();
-  {
-    ffi_type* argtypes[] = { &ffi_type_double, &ffi_type_uint, &ffi_type_double, &ffi_type_double, &ffi_type_double };
-    ffi_cif cif;
-    FFI_PREP_CIF_VAR(cif,2,argtypes,ffi_type_double); /* 2 fixed args */
-    {
-      unsigned varcount = 3U;
-      /*const*/ void* args[] = { &d1, &varcount, &d2, &d3, &d4 };
-      FFI_CALL(cif, d_divar, args, &dr);
-    }
-  }
-  FPRINTF(out,"->%g\n",dr); fflush(out);
   /* */
-  dr = d_pdvar(&d1,&d2,&d3,&d4,null);
-  FPRINTF(out,"->%g\n",dr); fflush(out);
-  dr = 0; clear_traces();
   {
-    ffi_type* argtypes[] = { &ffi_type_pointer, &ffi_type_pointer, &ffi_type_pointer, &ffi_type_pointer, &ffi_type_pointer };
-    ffi_cif cif;
-    FFI_PREP_CIF_VAR(cif,2,argtypes,ffi_type_double); /* 2 fixed args */
+    double dr;
+    dr = d_divar(d1,3, d2,d3,d4);
+    FPRINTF(out,"->%g\n",dr); fflush(out);
+    dr = 0; clear_traces();
     {
-      double *pd1=&d1;
-      double *pd2=&d2;
-      double *pd3=&d3;
-      double *pd4=&d4;
-      void *pnull=&null;
-      /*const*/ void* args[] = { &pd1, &pd2, &pd3, &pd4, pnull };
-      FFI_CALL(cif, d_pdvar, args, &dr);
+      ffi_type* argtypes[] = { &ffi_type_double, &ffi_type_uint, &ffi_type_double, &ffi_type_double, &ffi_type_double };
+      ffi_cif cif;
+      FFI_PREP_CIF_VAR(cif,2,argtypes,ffi_type_double); /* 2 fixed args */
+      {
+        unsigned varcount = 3U;
+        /*const*/ void* args[] = { &d1, &varcount, &d2, &d3, &d4 };
+        FFI_CALL(cif, d_divar, args, &dr);
+      }
     }
+    FPRINTF(out,"->%g\n",dr); fflush(out);
   }
-  FPRINTF(out,"->%g\n",dr); fflush(out);
   /* */
- {char *fmt="%s AND %s AND %s";
-  char buf[120];
-  int ir = i_cpivar(buf,fmt,str1,str2,str3);
-  FPRINTF(out,"->%d\n",ir); fflush(out);
-  ir = 0; clear_traces();
   {
-    ffi_type* argtypes[] = { &ffi_type_pointer, &ffi_type_pointer, &ffi_type_pointer, &ffi_type_pointer, &ffi_type_pointer };
-    ffi_cif cif;
-    FFI_PREP_CIF_VAR(cif,2,argtypes,ffi_type_double); /* 2 fixed args */
+    double dr;
+    void *null=NULL;
+    dr = d_pdvar(&d1,&d2,&d3,&d4,null);
+    FPRINTF(out,"->%g\n",dr); fflush(out);
+    dr = 0; clear_traces();
     {
-      char* pbuf=&buf[0];
-      char* pfmt = fmt;
-      void* pstr1 = str1;
-      void* pstr2 = str2;
-      void* pstr3 = str3;
-      /*const*/ void* args[] = { &pbuf, &pfmt, &pstr1, &pstr2, &pstr3 };
-      FFI_CALL(cif, i_cpivar, args, &ir);
+      ffi_type* argtypes[] = { &ffi_type_pointer, &ffi_type_pointer, &ffi_type_pointer, &ffi_type_pointer, &ffi_type_pointer };
+      ffi_cif cif;
+      FFI_PREP_CIF_VAR(cif,2,argtypes,ffi_type_double); /* 2 fixed args */
+      {
+        double *pd1=&d1;
+        double *pd2=&d2;
+        double *pd3=&d3;
+        double *pd4=&d4;
+        void *pnull=&null;
+        /*const*/ void* args[] = { &pd1, &pd2, &pd3, &pd4, pnull };
+        FFI_CALL(cif, d_pdvar, args, &dr);
+      }
     }
+    FPRINTF(out,"->%g\n",dr); fflush(out);
   }
-  FPRINTF(out,"->%d\n",ir); fflush(out);
+  /* */
+  {
+    char *fmt="%s AND %s AND %s";
+    char buf[120];
+    int ir = i_cpivar(buf,fmt,str1,str2,str3);
+    FPRINTF(out,"->%d\n",ir); fflush(out);
+    ir = 0; clear_traces();
+    {
+      ffi_type* argtypes[] = { &ffi_type_pointer, &ffi_type_pointer, &ffi_type_pointer, &ffi_type_pointer, &ffi_type_pointer };
+      ffi_cif cif;
+      FFI_PREP_CIF_VAR(cif,2,argtypes,ffi_type_double); /* 2 fixed args */
+      {
+        char* pbuf=&buf[0];
+        char* pfmt = fmt;
+        void* pstr1 = str1;
+        void* pstr2 = str2;
+        void* pstr3 = str3;
+        /*const*/ void* args[] = { &pbuf, &pfmt, &pstr1, &pstr2, &pstr3 };
+        FFI_CALL(cif, i_cpivar, args, &ir);
+      }
+    }
+    FPRINTF(out,"->%d\n",ir); fflush(out);
+  }
+  /* */
+  {
+    {
+      int ir = i_i5uvari(1,2,3,4,5,8,1,7,2,7,3,1,7,7); /*ans?=7*/
+      FPRINTF(out,"->%d\n",ir); fflush(out);
+    }
+    int ir = i_i5uvari(i1,i2,i3,i4,i5,8,i1,i7,i2,i7,i3,i1,i7,i7); /*ans?=7*/
+    FPRINTF(out,"->%d\n",ir); fflush(out);
+    ir = 0; clear_traces();
+    {
+      ffi_type* argtypes[] = { &ffi_type_sint, &ffi_type_sint, &ffi_type_sint, &ffi_type_sint, &ffi_type_sint, &ffi_type_uint,
+        &ffi_type_sint, &ffi_type_sint, &ffi_type_sint, &ffi_type_sint, &ffi_type_sint, &ffi_type_sint, &ffi_type_sint, &ffi_type_sint };
+      ffi_cif cif;
+      FFI_PREP_CIF_VAR(cif,6,argtypes,ffi_type_sint); /* 6 fixed args */
+      {
+        unsigned cnt = 8U;
+        int a=i1,b=i7,c=i2,d=i7,e=i3,f=i1,g=i7,h=i7;
+        /*const*/ void* args[] = {&i1,&i2,&i3,&i4,&i5, &cnt, &a,&b,&c,&d, &e,&f,&g,&h};
+        FFI_CALL(cif, i_i5uvari, args, &ir);
+      }
+    }
+    FPRINTF(out,"->%d\n",ir); fflush(out);
   }
 #endif
   return;

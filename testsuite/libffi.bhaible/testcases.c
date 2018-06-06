@@ -1175,12 +1175,25 @@ double d_pdvar(double* pd,...){
 int i_cpivar(char *buf, char *fmt, ...){
   int r;
   va_list args;
-  fprintf(out,"double i_cpivar(char*,char*,...):(%p,\"%s\",...)",(void*)buf,fmt); fflush(out);
+  fprintf(out,"int i_cpivar(char*,char*,...):(%p,\"%s\",...)",(void*)buf,fmt); fflush(out);
   va_start(args,fmt);
   r = vsprintf(buf,fmt,args);
   fprintf(out,":%s",buf);
   va_end(args);
   return r;
 }
-
+int i_i5uvari(int s1,int s2,int s3,int s4,int s5,unsigned cnt,...){
+  int r = 0;
+  va_list args;
+  va_start(args,cnt);
+  fprintf(out,"i_i5uvari(int,int,int,int,int,unsigned,int...):(%d,%d,%d,%d,%d,%u,...",s1,s2,s3,s4,s5,cnt); fflush(out);
+  for(unsigned i=0U; i<cnt; ++i){
+    int j = va_arg(args,int);
+    fprintf(out,"%c%d",(i==0?'{':','),j); fflush(out);
+    if(j==s1||j==s2||j==s3||j==s4||j==s5) r+= j;
+  }
+  va_end(args);
+  fprintf(out,"})"); fflush(out);
+  return r;
+}
 /* vim: set sw=2 ts=2 et: */

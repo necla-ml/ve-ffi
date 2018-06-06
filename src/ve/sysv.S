@@ -783,7 +783,7 @@ ffi_closure_ve:
 	ld	%s2, 16(,%s12)			/* Load user_data */
 	/* we no longer need trampoline area */
 
-.L_do_closure:
+ffi_closure_do:
 	lea	%s3, ffi_closure_OFS_RVALUE(,%sp)/* Load rvalue (4 byte max) */
 	lea	%s4, ffi_closure_OFS_G(,%sp)	/* Load reg_args (64 bytes) */
 	lea	%s5, ffi_closure_OFS_ARGP(,%sp)	/* Load argp */
@@ -793,7 +793,7 @@ ffi_closure_ve:
 	bsic	%lr,(,%s12)
 
 
-.L_closure_rvalue:
+ffi_closure_rvalue:
 	// just use scratch registers... no calls allowed
 	and	%s6, %s0,(58)0		# rtype->type from LSB (FFI_TYPE_FOO)
 	srl	%s7, %s0,8		# rtype->size in next byte
@@ -813,7 +813,7 @@ ffi_cl_rvalue2:
 	#brne.w.t	FFI_TYPE_FLOAT,%s6, .L_cl_notFLOAT
 	#ffi_cl_rFLOAT:
 	#ldu	%s0, ffi_closure_OFS_RVALUE+0x00(,%sp)
-	#br.w	.L_closure_ret
+	#br.w	ffi_closure_ret
 	#.L_cl_notFLOAT:
 	breq.w.nt	FFI_TYPE_LONGDOUBLE,%s6, ffi_cl_rSwap01
 	brne.w.t	FFI_TYPE_COMPLEX,%s6, .L_cl_notCOMPLEX
@@ -822,7 +822,7 @@ ffi_cl_rcomplex:
 	#brne.l.nt	8, %s7 ,.L_cl_notFLOATCOMPLEX
 	#ldu	%s0, ffi_closure_OFS_RVALUE+0x00(,%sp)
 	#ldu	%s1, ffi_closure_OFS_RVALUE+0x04(,%sp)
-	#br.w	.L_closure_ret
+	#br.w	ffi_closure_ret
 	.L_cl_notFLOATCOMPLEX:
 	breq.l.t	16, %s7 ,ffi_cl_r01
 	br.w	ffi_cl_r0123
@@ -833,15 +833,15 @@ ffi_cl_rcomplex:
 ffi_cl_rSwap01: /* %s0 <---> higher mem address */
 	ld	%s0, ffi_closure_OFS_RVALUE+0x08(,%sp)	# SWAP 0<->1
 	ld	%s1, ffi_closure_OFS_RVALUE+0x00(,%sp)
-	br.w	.L_closure_ret
+	br.w	ffi_closure_ret
 ffi_cl_rF01_packed:
 	ldu	%s1, ffi_closure_OFS_RVALUE+0x04(,%sp)
 ffi_cl_rF0:
 	ldu	%s0, ffi_closure_OFS_RVALUE+0x00(,%sp)
-	br.w	.L_closure_ret
+	br.w	ffi_closure_ret
 	# rvalue processing (return value ---> registers, maybe)
 	#   MAYBE bump up %sp early so we can "b.l (,%lr)"
-	#         instead of "br.w .L_closure_ret"
+	#         instead of "br.w ffi_closure_ret
 ffi_cl_r0123:
 	ld	%s3, ffi_closure_OFS_RVALUE+0x18(,%sp)
 	ld	%s2, ffi_closure_OFS_RVALUE+0x10(,%sp)
@@ -849,12 +849,15 @@ ffi_cl_r01:
 	ld	%s1, ffi_closure_OFS_RVALUE+0x08(,%sp)
 ffi_cl_r0:
 	ld	%s0, ffi_closure_OFS_RVALUE+0x00(,%sp)
-.L_closure_ret:
+ffi_closure_ret:
 	ld	%lr, ffi_closure_OFS_RETADDR(,%sp)	# pre-tramp ret addr
 	lea	%sp, ffi_closure_ALLOCA(,%sp)		# remove alloca space
 	b.l	(,%lr)					# return (pre-tramp)
 	.cfi_endproc
 	.size	ffi_closure_ve, . - ffi_closure_ve
+.globl ffi_closure_ret
+.globl ffi_closure_rvalue
+.globl ffi_closure_do
 
 ffi_closure_vexx:
 	;#stack frame .cfi directives are for nice stack debug
