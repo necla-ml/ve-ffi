@@ -783,7 +783,7 @@ ffi_closure_ve:
 	ld	%s2, 16(,%s12)			/* Load user_data */
 	/* we no longer need trampoline area */
 
-ffi_closure_do:
+//ffi_closure_do:
 	lea	%s3, ffi_closure_OFS_RVALUE(,%sp)/* Load rvalue (4 byte max) */
 	lea	%s4, ffi_closure_OFS_G(,%sp)	/* Load reg_args (64 bytes) */
 	lea	%s5, ffi_closure_OFS_ARGP(,%sp)	/* Load argp */
@@ -793,7 +793,7 @@ ffi_closure_do:
 	bsic	%lr,(,%s12)
 
 
-ffi_closure_rvalue:
+//ffi_closure_rvalue:
 	// just use scratch registers... no calls allowed
 	and	%s6, %s0,(58)0		# rtype->type from LSB (FFI_TYPE_FOO)
 	srl	%s7, %s0,8		# rtype->size in next byte
@@ -801,7 +801,7 @@ ffi_closure_rvalue:
 	lea	%s1, ffi_closure_OFS_PARMS(,%sp)
 	lea	%s4, ffi_closure_OFS_RVALUE(,%sp)	# pre-tramp ret addr
 	ld	%lr, ffi_closure_OFS_RETADDR(,%sp)	# rvalue mem ptr
-ffi_cl_rvalue2:
+//ffi_cl_rvalue2:
 # Following branch turned out not useful for VE
 #	ld	%s5, ffi_closure_OFS_RETADDR+0x08(,%sp) # 0/1: REFERENCE rvalue?
 #	breq.l.t	%s5,0,.L_closure_REGISTER
@@ -817,7 +817,7 @@ ffi_cl_rvalue2:
 	#.L_cl_notFLOAT:
 	breq.w.nt	FFI_TYPE_LONGDOUBLE,%s6, ffi_cl_rSwap01
 	brne.w.t	FFI_TYPE_COMPLEX,%s6, .L_cl_notCOMPLEX
-ffi_cl_rcomplex:
+//ffi_cl_rcomplex:
 	breq.l.nt	8, %s7 ,ffi_cl_rF01_packed
 	#brne.l.nt	8, %s7 ,.L_cl_notFLOATCOMPLEX
 	#ldu	%s0, ffi_closure_OFS_RVALUE+0x00(,%sp)
@@ -855,9 +855,9 @@ ffi_closure_ret:
 	b.l	(,%lr)					# return (pre-tramp)
 	.cfi_endproc
 	.size	ffi_closure_ve, . - ffi_closure_ve
-.globl ffi_closure_ret
-.globl ffi_closure_rvalue
-.globl ffi_closure_do
+//.globl ffi_closure_ret
+//.globl ffi_closure_rvalue
+//.globl ffi_closure_do
 
 ffi_closure_vexx:
 	;#stack frame .cfi directives are for nice stack debug
