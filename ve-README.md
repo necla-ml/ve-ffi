@@ -7,7 +7,7 @@ source ~/kruus/vt/env.bash --ve # or however you set up ncc environment
 
 Local build --> ./install/
 ~
-. ve-local-conf.sh >& ve-local-conf.log
+. ve-conf-local.sh >& ve-conf-local.log
 cd build && make
 make install
 ~

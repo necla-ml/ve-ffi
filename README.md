@@ -1,6 +1,13 @@
 Status
 ======
 
+- This version includes support for the NEC Aurora chip (VE).
+  - See ve-README.md for VE cross-compile build instructions.
+  - VE scripts were updated for ncc-2.x
+  - haible tests pass again,
+  - but I've not run fuller ABI tests yet,
+  - It looks like VE only has simple closure support (see src/ve/ffitarget.h)
+
 [![Build Status](https://travis-ci.org/libffi/libffi.svg?branch=master)](https://travis-ci.org/libffi/libffi)
 [![Build status](https://ci.appveyor.com/api/projects/status/8lko9vagbx4w2kxq?svg=true)](https://ci.appveyor.com/project/atgreen/libffi)
 
