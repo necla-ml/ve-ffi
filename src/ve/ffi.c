@@ -446,6 +446,13 @@ NEC VE ABI 0.10 does not support small-struct optimizations. */
   FIXME ncc already provides reg args area at beginning of args memory,
    reorder above arrangement!
 
+  FIXME machdep routines reginfo is superfluous, it is essentially
+   used a sanity check right now.  The whole stack allocation can
+   save an expensive VE function call if the 'modern' approach as
+   per x86_64 code to pre-reserve the stack area is taken.  Just
+   compare with how short the closure code [which was modelled after
+   x86_64] is.
+
    ecif->cif->bytes must be size of non-reg stack args + 64,
    as prepared by ffi_prep_cif_machdep(ffi_cif *cif)
 */
@@ -542,7 +549,7 @@ void ffi_prep_args(char *stack, extended_cif* ecif)
                 ffi_type_detail(*p_arg,i,ecif->cif->nfixedargs),
                 ffi_avalue_str(*p_arg,*p_argv));
 
-        Argclass cls = argclass(*p_arg); /* VE_REGISTER/REFERENCE/BOTH */
+        Argclass const cls = argclass(*p_arg); /* VE_REGISTER/REFERENCE/BOTH */
         if(i >= ecif->cif->nfixedargs){
             cls == VE_BOTH;
         }
@@ -1377,6 +1384,11 @@ struct register_args
  *  _________________________/
  *    Unwind: rvalue        
  *            -> reg        
+ * Simplification (TBD):
+ *  _inner may put "reg_args" area directly into "fun_args" area,
+ *  since 'C' compiler also reserves a same-size 64-byte area.
+ *  This effectively make all VE_REGISTER args actually passed in
+ *  both mem and regs, same as VE_BOTH.
  */
 /* Closure Frame: size and offsets
  *   0. sp..sp+176 reserved [not yet set!] for fp, ret addr, and RSA
